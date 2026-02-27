@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+scikit-learn
+pygithub
+ruamel.yaml
+requests
+streamlit
+joblib
