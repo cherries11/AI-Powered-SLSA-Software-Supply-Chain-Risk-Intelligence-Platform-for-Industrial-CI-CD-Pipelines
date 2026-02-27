@@ -13,36 +13,30 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      # 1️⃣ Checkout code
       - name: Checkout repo
         uses: actions/checkout@v3
 
-      # 2️⃣ Set up Python
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: 3.11
 
-      # 3️⃣ Install dependencies
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 4️⃣ Run lint
       - name: Lint
         run: |
           pip install flake8
           flake8 .
 
-      # 5️⃣ Run tests
       - name: Run tests
         run: |
           pip install pytest pytest-cov
-          pytest --cov=./
+          pytest --cov=./ --cov-report=xml
 
-      # 6️⃣ Upload code coverage
-      - name: Upload Code Coverage
+      - name: Upload code coverage
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -61,9 +55,9 @@ jobs:
         run: |
           docker build -t my-app:latest .
 
-      - name: Test Docker container (optional)
+      - name: Test Docker container
         run: |
-          docker run --rm my-app:latest streamlit --version
+          docker run --rm my-app:latest python --version
 
   sbom:
     name: Generate SBOM
@@ -96,9 +90,73 @@ jobs:
         with:
           type: https://slsa.dev/provenance/v0.2
           material-path: .
-          builder-id: "github.com/${{ github.repository }}/python-streamlit"
+          builder-id: "github.com/${{ github.repository }}/python-app"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Show attestation
         run: cat ./provenance.json
+
+  verify:
+    name: Verify SBOM & Provenance
+    runs-on: ubuntu-22.04
+    needs: [sbom, provenance]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v4
+
+      - name: Verify Docker Image Attestation
+        run: |
+          echo '${{ secrets.COSIGN_PUBLIC_KEY }}' > cosign.pub
+          cosign verify-attestation --key cosign.pub my-app:latest
+
+      - name: Verify SBOM Integrity
+        run: |
+          slsa-verifier verify-artifacts ./provenance.json --materials ./sbom.json
+
+  sign-docker:
+    name: Sign Docker Image
+    runs-on: ubuntu-22.04
+    needs: docker
+    steps:
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v4
+
+      - name: Sign Docker Image
+        run: |
+          cosign sign --key env://COSIGN_PRIVATE_KEY my-app:latest
+
+  release-artifacts:
+    name: Release Artifacts
+    runs-on: ubuntu-22.04
+    needs: [sbom, provenance, sign-docker]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload SBOM
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./sbom.json
+          asset_name: sbom.json
+          asset_content_type: application/json
+
+      - name: Upload Provenance
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./provenance.json
+          asset_name: provenance.json
+          asset_content_type: application/json
