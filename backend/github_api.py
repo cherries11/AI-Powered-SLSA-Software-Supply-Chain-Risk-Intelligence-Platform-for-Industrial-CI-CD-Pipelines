@@ -1,8 +1,6 @@
-# backend/github_api.py
 from github import Github
-import requests
 import yaml
-from typing import Dict, List
+from typing import Dict
 
 def get_workflow_yaml(repo_url: str, github_pat: str = None) -> Dict[str, str]:
     """
@@ -42,6 +40,7 @@ def get_workflow_yaml(repo_url: str, github_pat: str = None) -> Dict[str, str]:
             workflows[file.name] = file.decoded_content.decode("utf-8")
 
     return workflows
+
 
 # Optional helper: validate YAML
 def parse_yaml(yaml_str: str) -> Dict:

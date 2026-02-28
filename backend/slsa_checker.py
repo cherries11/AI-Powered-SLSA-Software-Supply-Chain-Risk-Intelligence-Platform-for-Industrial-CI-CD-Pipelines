@@ -1,4 +1,3 @@
-# backend/slsa_checker.py
 """
 SLSA Compliance Checker
 
@@ -14,7 +13,7 @@ Features:
 import logging
 import subprocess
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional
 
 from ruamel.yaml import YAML, YAMLError
 
@@ -56,10 +55,10 @@ def estimate_slsa_level_from_static(issues: List[Dict]) -> int:
 def static_slsa_analysis(workflow_dict: Dict[str, str]) -> Dict[str, Any]:
     """
     Perform static analysis on workflow YAML files.
-    
+
     Args:
         workflow_dict: {filename: yaml_content_str}
-    
+
     Returns:
         Dict with level, issues, suggestions
     """
@@ -95,7 +94,9 @@ def static_slsa_analysis(workflow_dict: Dict[str, str]) -> Dict[str, Any]:
                             "details": f"uses '{runs_on}' – should be specific version or self-hosted",
                             "severity": "medium"
                         })
-                        suggestions.add("Replace 'runs-on: latest' with specific version or self-hosted label")
+                        suggestions.add(
+                            "Replace 'runs-on: latest' with specific version or self-hosted label"
+                        )
 
                 # Step-level checks
                 for idx, step in enumerate(job.get("steps", [])):
@@ -113,10 +114,16 @@ def static_slsa_analysis(workflow_dict: Dict[str, str]) -> Dict[str, Any]:
                                 "details": f"uses: {uses}",
                                 "severity": "high"
                             })
-                            suggestions.add(f"Pin action in '{job_name}' → '{step_name}': use SHA digest")
+                            suggestions.add(
+                                f"Pin action in '{job_name}' → '{step_name}': use SHA digest"
+                            )
 
                         # Missing attestation step (heuristic)
-                        if "slsa" not in uses.lower() and "attest" not in uses.lower() and "provenance" not in uses.lower():
+                        if (
+                            "slsa" not in uses.lower()
+                            and "attest" not in uses.lower()
+                            and "provenance" not in uses.lower()
+                        ):
                             issues.append({
                                 "file": filename,
                                 "job": job_name,
@@ -125,7 +132,10 @@ def static_slsa_analysis(workflow_dict: Dict[str, str]) -> Dict[str, Any]:
                                 "details": "No SLSA provenance generation step detected",
                                 "severity": "high"
                             })
-                            suggestions.add(f"Add SLSA provenance step in job '{job_name}', e.g. uses: slsa-framework/slsa-github-generator@v2")
+                            suggestions.add(
+                                f"Add SLSA provenance step in job '{job_name}', "
+                                "e.g. uses: slsa-framework/slsa-github-generator@v2"
+                            )
 
         except YAMLError as e:
             issues.append({
@@ -161,25 +171,26 @@ def dynamic_provenance_verification(
 ) -> Dict[str, Any]:
     """
     Verify SLSA provenance using slsa-verifier binary.
-    
+
     Args:
         artifact_path: Path to built artifact (e.g. image tar, digest)
         provenance_path: Path to downloaded provenance file
         verifier_bin: Path to slsa-verifier executable
         source_uri: Expected source repo URI
         source_branch: Expected branch
-    
+
     Returns:
         Verification result dict
     """
     try:
         cmd = [
-              verifier_bin,
-              "verify-artifact",
-              "--provenance-path", provenance_path,
-              "--source-uri", "https://github.com/kamisara/AI-Powered-SLSA-Software-Supply-Chain-Risk-Intelligence-Platform-for-Industrial-CI-CD-Pipelines.git",  # add this!
-              "--source-branch", "main",
-              ]
+            verifier_bin,
+            "verify-artifact",
+            "--provenance-path", provenance_path,
+            "--source-uri", "https://github.com/kamisara/AI-Powered-SLSA-Software-Supply-Chain-Risk-Intelligence-Platform-for-Industrial-CI-CD-Pipelines.git",
+            "--source-branch", "main",
+        ]
+
         if source_uri:
             cmd.extend(["--source-uri", source_uri])
         if source_branch:
@@ -227,7 +238,7 @@ def full_slsa_check(
 ) -> Dict[str, Any]:
     """
     Full SLSA compliance check: static analysis + dynamic verification (if artifact given).
-    
+
     Returns unified result ready for API response.
     """
     # Static analysis first
@@ -280,7 +291,7 @@ jobs:
 
     # ── Dynamic verification test ──
     print("\n=== Dynamic verification test (fake files) ===")
-    
+
     # Use these fake files (create them if not present)
     artifact_path = "dummy-scada.tar"
     provenance_path = "provenance.json"
@@ -291,5 +302,5 @@ jobs:
         provenance_path=provenance_path,
         verifier_bin="tools/slsa-verifier.exe"  # adjust if path is different
     )
-    
+
     print(full_result)
