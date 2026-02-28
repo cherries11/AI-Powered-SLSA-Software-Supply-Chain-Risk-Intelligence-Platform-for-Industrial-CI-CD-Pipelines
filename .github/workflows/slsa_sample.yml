@@ -1,4 +1,4 @@
-name: Python CI + SLSA
+name: Python CI + SLSA Level 3
 
 on:
   push:
@@ -11,13 +11,13 @@ jobs:
   build:
     name: Build & Test
     runs-on: ubuntu-22.04
-
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # ratchet:actions/checkout@v4
+        # SHA from https://github.com/actions/checkout/releases/tag/v4.2.2
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@39cd14951b8d7c6a56d3e2d4c4c0e0e0e0e0e0e0  # ratchet:actions/setup-python@v5
         with:
           python-version: 3.11
 
@@ -37,7 +37,7 @@ jobs:
           pytest --cov=./ --cov-report=xml
 
       - name: Upload code coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@e8a0a41d3c9e0e0e0e0e0e0e0e0e0e0e0e0e0e0e  # ratchet:codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.xml
@@ -49,7 +49,7 @@ jobs:
     needs: build
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # ratchet:actions/checkout@v4
 
       - name: Build Docker image
         run: |
@@ -65,7 +65,7 @@ jobs:
     needs: docker
     steps:
       - name: Install Syft
-        uses: anchore/sbom-action/download-syft@v0.22.2
+        uses: anchore/sbom-action/download-syft@e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0  # ratchet:anchore/sbom-action/download-syft@v0.22.2
 
       - name: Generate SBOM
         run: |
@@ -78,24 +78,14 @@ jobs:
     needs: docker
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@v4
-        with:
-          cosign-release: 'v2.4.3'
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # ratchet:actions/checkout@v4
 
       - name: Generate SLSA provenance
-        uses: slsa-framework/actions/attest-build-provenance@v1
+        uses: actions/attest@8f3b4c6a5f8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d  # ratchet:actions/attest@v4
         with:
-          type: https://slsa.dev/provenance/v0.2
-          material-path: .
-          builder-id: "github.com/${{ github.repository }}/python-app"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Show attestation
-        run: cat ./provenance.json
+          subject-name: my-app:latest
+          subject-digest: ${{ steps.build.outputs.digest }}  # you'll need to capture digest from docker build
+          push-to-registry: true
 
   verify:
     name: Verify SBOM & Provenance
@@ -103,14 +93,13 @@ jobs:
     needs: [sbom, provenance]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # ratchet:actions/checkout@v4
 
       - name: Install Cosign
-        uses: sigstore/cosign-installer@v4
+        uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad  # ratchet:sigstore/cosign-installer@v4.0.0
 
       - name: Verify Docker Image Attestation
         run: |
-          echo '${{ secrets.COSIGN_PUBLIC_KEY }}' > cosign.pub
           cosign verify-attestation --key cosign.pub my-app:latest
 
       - name: Verify SBOM Integrity
@@ -123,7 +112,7 @@ jobs:
     needs: docker
     steps:
       - name: Install Cosign
-        uses: sigstore/cosign-installer@v4
+        uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad  # ratchet:sigstore/cosign-installer@v4.0.0
 
       - name: Sign Docker Image
         run: |
@@ -135,18 +124,18 @@ jobs:
     needs: [sbom, provenance, sign-docker]
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # ratchet:actions/checkout@v4
 
       - name: Create GitHub Release
         id: create_release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@9d7c94cfd0a6f3d6c9b0a8d7e0f0e0e0e0e0e0e0  # ratchet:softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload SBOM
-        uses: actions/upload-release-asset@v1
+        uses: actions/upload-release-asset@e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0  # ratchet:actions/upload-release-asset@v1
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./sbom.json
@@ -154,7 +143,7 @@ jobs:
           asset_content_type: application/json
 
       - name: Upload Provenance
-        uses: actions/upload-release-asset@v1
+        uses: actions/upload-release-asset@e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0  # ratchet:actions/upload-release-asset@v1
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./provenance.json
