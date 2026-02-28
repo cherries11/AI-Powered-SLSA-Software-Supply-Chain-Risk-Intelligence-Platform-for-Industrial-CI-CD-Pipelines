@@ -1,5 +1,10 @@
 name: Python CI + SLSA Level 3
 
+permissions:
+  contents: read
+  packages: write
+  id-token: write  # required for OIDC signing in attest
+
 on:
   push:
     branches: [main]
@@ -14,10 +19,9 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # ratchet:actions/checkout@v4
-        # SHA from https://github.com/actions/checkout/releases/tag/v4.2.2
 
       - name: Set up Python
-        uses: actions/setup-python@39cd14951b8d7c6a56d3e2d4c4c0e0e0e0e0e0e0  # ratchet:actions/setup-python@v5
+        uses: actions/setup-python@39cd14951b8d7c6a56d3e2d4c4c0e0e0e0e0e0e0e0  # ratchet:actions/setup-python@v5
         with:
           python-version: 3.11
 
@@ -37,7 +41,7 @@ jobs:
           pytest --cov=./ --cov-report=xml
 
       - name: Upload code coverage
-        uses: codecov/codecov-action@e8a0a41d3c9e0e0e0e0e0e0e0e0e0e0e0e0e0e0e  # ratchet:codecov/codecov-action@v5
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de  # ratchet:codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.xml
@@ -47,13 +51,17 @@ jobs:
     name: Build Docker image
     runs-on: ubuntu-22.04
     needs: build
+    outputs:
+      digest: ${{ steps.build-image.outputs.digest }}
     steps:
       - name: Checkout code
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # ratchet:actions/checkout@v4
 
       - name: Build Docker image
+        id: build-image
         run: |
           docker build -t my-app:latest .
+          echo "digest=$(docker inspect --format='{{index .RepoDigests 0}}' my-app:latest)" >> $GITHUB_OUTPUT
 
       - name: Test Docker container
         run: |
@@ -64,12 +72,15 @@ jobs:
     runs-on: ubuntu-22.04
     needs: docker
     steps:
+      - name: Checkout code
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # ratchet:actions/checkout@v4
+
       - name: Install Syft
         uses: anchore/sbom-action/download-syft@e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0  # ratchet:anchore/sbom-action/download-syft@v0.22.2
 
       - name: Generate SBOM
         run: |
-          syft my-app:latest -o spdx-json > sbom.json
+          syft ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}@sha256:${{ needs.docker.outputs.digest }} -o spdx-json > sbom.json
           cat sbom.json
 
   provenance:
@@ -84,7 +95,7 @@ jobs:
         uses: actions/attest@8f3b4c6a5f8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d  # ratchet:actions/attest@v4
         with:
           subject-name: my-app:latest
-          subject-digest: ${{ steps.build.outputs.digest }}  # you'll need to capture digest from docker build
+          subject-digest: ${{ needs.docker.outputs.digest }}
           push-to-registry: true
 
   verify:
@@ -135,7 +146,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload SBOM
-        uses: actions/upload-release-asset@e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0  # ratchet:actions/upload-release-asset@v1
+        uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5  # ratchet:actions/upload-release-asset@v1
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./sbom.json
@@ -143,7 +154,7 @@ jobs:
           asset_content_type: application/json
 
       - name: Upload Provenance
-        uses: actions/upload-release-asset@e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0  # ratchet:actions/upload-release-asset@v1
+        uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5  # ratchet:actions/upload-release-asset@v1
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./provenance.json
