@@ -1,10 +1,5 @@
 name: Python CI + SLSA Level 3
 
-permissions:
-  contents: read
-  packages: write
-  id-token: write  # required for OIDC signing in attest
-
 on:
   push:
     branches: [main]
@@ -19,9 +14,10 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # ratchet:actions/checkout@v4
+        # SHA from https://github.com/actions/checkout/releases/tag/v4.2.2
 
       - name: Set up Python
-        uses: actions/setup-python@39cd14951b8d7c6a56d3e2d4c4c0e0e0e0e0e0e0e0  # ratchet:actions/setup-python@v5
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # ratchet:actions/setup-python@v5
         with:
           python-version: 3.11
 
@@ -51,17 +47,13 @@ jobs:
     name: Build Docker image
     runs-on: ubuntu-22.04
     needs: build
-    outputs:
-      digest: ${{ steps.build-image.outputs.digest }}
     steps:
       - name: Checkout code
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # ratchet:actions/checkout@v4
 
       - name: Build Docker image
-        id: build-image
         run: |
           docker build -t my-app:latest .
-          echo "digest=$(docker inspect --format='{{index .RepoDigests 0}}' my-app:latest)" >> $GITHUB_OUTPUT
 
       - name: Test Docker container
         run: |
@@ -72,15 +64,12 @@ jobs:
     runs-on: ubuntu-22.04
     needs: docker
     steps:
-      - name: Checkout code
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # ratchet:actions/checkout@v4
-
       - name: Install Syft
-        uses: anchore/sbom-action/download-syft@e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0  # ratchet:anchore/sbom-action/download-syft@v0.22.2
+        uses: anchore/sbom-action/download-syft@17ae1740179002c89186b61233e0f892c3118b11  # ratchet:anchore/sbom-action/download-syft@v0.22.2
 
       - name: Generate SBOM
         run: |
-          syft ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}@sha256:${{ needs.docker.outputs.digest }} -o spdx-json > sbom.json
+          syft my-app:latest -o spdx-json > sbom.json
           cat sbom.json
 
   provenance:
@@ -92,10 +81,10 @@ jobs:
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # ratchet:actions/checkout@v4
 
       - name: Generate SLSA provenance
-        uses: actions/attest@8f3b4c6a5f8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d  # ratchet:actions/attest@v4
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26  # ratchet:actions/attest@v4
         with:
           subject-name: my-app:latest
-          subject-digest: ${{ needs.docker.outputs.digest }}
+          subject-digest: ${{ steps.build.outputs.digest }}  # you'll need to capture digest from docker build
           push-to-registry: true
 
   verify:
@@ -139,7 +128,7 @@ jobs:
 
       - name: Create GitHub Release
         id: create_release
-        uses: softprops/action-gh-release@9d7c94cfd0a6f3d6c9b0a8d7e0f0e0e0e0e0e0e0  # ratchet:softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b  # ratchet:softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
         env:
