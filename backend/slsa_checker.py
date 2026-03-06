@@ -1,8 +1,7 @@
-# backend/slsa_checker.py
 """
 SLSA Compliance Checker
 
-Performs static analysis of GitHub Actions workflow YAML files
+Performs both static analysis of GitHub Actions workflow YAML files
 and dynamic provenance verification using slsa-verifier.
 
 Features:
@@ -13,7 +12,8 @@ Features:
 
 import logging
 import subprocess
-from typing import Dict, List, Any, Optional, Set
+from pathlib import Path
+from typing import Dict, List, Any, Optional
 
 from ruamel.yaml import YAML, YAMLError
 
@@ -34,13 +34,13 @@ class InvalidWorkflowError(SLSAComplianceError):
     pass
 
 
-def estimate_slsa_level_from_static(issues: List[Dict[str, Any]]) -> int:
+def estimate_slsa_level_from_static(issues: List[Dict]) -> int:
     """
     Simple heuristic to estimate SLSA level based on static findings.
     Can be replaced with ML later.
     """
     if not issues:
-        return 3  # No issues → assume good practices
+        return 3  # No issues → assume good practices (optimistic)
 
     high_issues = sum(1 for i in issues if i.get("severity") == "high")
     medium_issues = sum(1 for i in issues if i.get("severity") == "medium")
@@ -62,8 +62,8 @@ def static_slsa_analysis(workflow_dict: Dict[str, str]) -> Dict[str, Any]:
     Returns:
         Dict with level, issues, suggestions
     """
-    issues: List[Dict[str, Any]] = []
-    suggestions: Set[str] = set()
+    issues: List[Dict] = []
+    suggestions: List[str] = set()
 
     for filename, yaml_str in workflow_dict.items():
         try:
@@ -85,24 +85,25 @@ def static_slsa_analysis(workflow_dict: Dict[str, str]) -> Dict[str, Any]:
             for job_name, job in data.get("jobs", {}).items():
                 # Runner pinning
                 runs_on = job.get("runs-on")
-                if isinstance(runs_on, str) and "latest" in runs_on.lower():
-                    issues.append({
-                        "file": filename,
-                        "job": job_name,
-                        "type": "unpinned_runner",
-                        "details": f"uses '{runs_on}' – should be specific version or self-hosted",
-                        "severity": "medium"
-                    })
-                    suggestions.add(
-                        "Replace 'runs-on: latest' with specific version or self-hosted label"
-                    )
+                if isinstance(runs_on, str):
+                    if "latest" in runs_on.lower():
+                        issues.append({
+                            "file": filename,
+                            "job": job_name,
+                            "type": "unpinned_runner",
+                            "details": f"uses '{runs_on}' – should be specific version or self-hosted",
+                            "severity": "medium"
+                        })
+                        suggestions.add(
+                            "Replace 'runs-on: latest' with specific version or self-hosted label"
+                        )
 
                 # Step-level checks
                 for idx, step in enumerate(job.get("steps", [])):
-                    step_name = step.get("name", f"step {idx+1}")
+                    step_name = step.get("name", f"step {idx + 1}")
                     uses = step.get("uses")
 
-                    if isinstance(uses, str):
+                    if uses and isinstance(uses, str):
                         # Unpinned action
                         if "@" not in uses or uses.endswith(("@main", "@master", "@head")):
                             issues.append({
@@ -117,8 +118,12 @@ def static_slsa_analysis(workflow_dict: Dict[str, str]) -> Dict[str, Any]:
                                 f"Pin action in '{job_name}' → '{step_name}': use SHA digest"
                             )
 
-                        # Missing attestation step
-                        if all(k not in uses.lower() for k in ("slsa", "attest", "provenance")):
+                        # Missing attestation step (heuristic)
+                        if (
+                            "slsa" not in uses.lower()
+                            and "attest" not in uses.lower()
+                            and "provenance" not in uses.lower()
+                        ):
                             issues.append({
                                 "file": filename,
                                 "job": job_name,
@@ -129,7 +134,7 @@ def static_slsa_analysis(workflow_dict: Dict[str, str]) -> Dict[str, Any]:
                             })
                             suggestions.add(
                                 f"Add SLSA provenance step in job '{job_name}', "
-                                "e.g., uses: slsa-framework/slsa-github-generator@v2"
+                                "e.g. uses: slsa-framework/slsa-github-generator@v2"
                             )
 
         except YAMLError as e:
@@ -153,7 +158,7 @@ def static_slsa_analysis(workflow_dict: Dict[str, str]) -> Dict[str, Any]:
     return {
         "level": level,
         "issues": issues,
-        "suggestions": list(suggestions)  # deduplicate
+        "suggestions": list(set(suggestions))  # deduplicate
     }
 
 
@@ -162,13 +167,13 @@ def dynamic_provenance_verification(
     provenance_path: str,
     verifier_bin: str = "tools/slsa-verifier.exe",
     source_uri: str = "",
-    source_branch: str = "main"
+    source_branch: str = "main",
 ) -> Dict[str, Any]:
     """
     Verify SLSA provenance using slsa-verifier binary.
 
     Args:
-        artifact_path: Path to built artifact (e.g., image tar, digest)
+        artifact_path: Path to built artifact (e.g. image tar, digest)
         provenance_path: Path to downloaded provenance file
         verifier_bin: Path to slsa-verifier executable
         source_uri: Expected source repo URI
@@ -181,7 +186,12 @@ def dynamic_provenance_verification(
         cmd = [
             verifier_bin,
             "verify-artifact",
-            "--provenance-path", provenance_path,
+            "--provenance-path",
+            provenance_path,
+            "--source-uri",
+            "https://github.com/kamisara/AI-Powered-SLSA-Software-Supply-Chain-Risk-Intelligence-Platform-for-Industrial-CI-CD-Pipelines.git",
+            "--source-branch",
+            "main",
         ]
 
         if source_uri:
@@ -196,7 +206,7 @@ def dynamic_provenance_verification(
             capture_output=True,
             text=True,
             check=False,
-            timeout=60
+            timeout=60,  # safety timeout
         )
 
         if result.returncode == 0:
@@ -204,15 +214,15 @@ def dynamic_provenance_verification(
                 "verified": True,
                 "level": 3,
                 "output": result.stdout.strip(),
-                "error": None
+                "error": None,
             }
-
-        return {
-            "verified": False,
-            "level": 0,
-            "output": result.stdout.strip(),
-            "error": result.stderr.strip() or "Verification failed"
-        }
+        else:
+            return {
+                "verified": False,
+                "level": 0,
+                "output": result.stdout.strip(),
+                "error": result.stderr.strip() or "Verification failed",
+            }
 
     except subprocess.TimeoutExpired:
         return {"verified": False, "level": 0, "error": "Verifier timeout"}
@@ -227,30 +237,33 @@ def full_slsa_check(
     workflow_dict: Dict[str, str],
     artifact_path: Optional[str] = None,
     provenance_path: Optional[str] = None,
-    verifier_bin: str = "tools/slsa-verifier.exe"
+    verifier_bin: str = "tools/slsa-verifier.exe",
 ) -> Dict[str, Any]:
     """
     Full SLSA compliance check: static analysis + dynamic verification (if artifact given).
 
     Returns unified result ready for API response.
     """
+    # Static analysis first
     static_result = static_slsa_analysis(workflow_dict)
 
     result = {
         "level": static_result["level"],
         "issues": static_result["issues"],
         "suggestions": static_result["suggestions"],
-        "verification": None
+        "verification": None,
     }
 
+    # Dynamic verification (if artifact and provenance provided)
     if artifact_path and provenance_path:
         verification = dynamic_provenance_verification(
             artifact_path=artifact_path,
             provenance_path=provenance_path,
-            verifier_bin=verifier_bin
+            verifier_bin=verifier_bin,
         )
         result["verification"] = verification
 
+        # Upgrade level if dynamic verify passes
         if verification["verified"]:
             result["level"] = max(result["level"], 3)
 
@@ -261,6 +274,7 @@ def full_slsa_check(
 # Example usage (for testing)
 # ────────────────────────────────────────────────
 if __name__ == "__main__":
+    # Dummy test data for static analysis
     test_workflows = {
         "build.yml": """
 name: Build
@@ -278,7 +292,10 @@ jobs:
     static_result = full_slsa_check(test_workflows)
     print(static_result)
 
+    # ── Dynamic verification test ──
     print("\n=== Dynamic verification test (fake files) ===")
+
+    # Use these fake files (create them if not present)
     artifact_path = "dummy-scada.tar"
     provenance_path = "provenance.json"
 
@@ -286,6 +303,7 @@ jobs:
         test_workflows,
         artifact_path=artifact_path,
         provenance_path=provenance_path,
-        verifier_bin="tools/slsa-verifier.exe"
+        verifier_bin="tools/slsa-verifier.exe",  # adjust if path is different
     )
+
     print(full_result)
