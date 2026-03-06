@@ -1,19 +1,25 @@
 # tests/test_github_api.py
 import sys
 import os
-
-# Add repo root to sys.path so 'backend' is importable
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-# Now the imports will work
 from backend.github_api import get_workflow_yaml, parse_yaml
-
-# Load .env file
 from dotenv import load_dotenv
+# Add repo root to sys.path so 'backend' is importable
+sys.path.insert(
+    0,
+    os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..")
+    )
+)
+
 load_dotenv()
 
 # Repo info
-repo_url = "https://github.com/kamisara/AI-Powered-SLSA-Software-Supply-Chain-Risk-Intelligence-Platform-for-Industrial-CI-CD-Pipelines"
+repo_url = (
+    "https://github.com/kamisara/"
+    "AI-Powered-SLSA-Software-Supply-"
+    "Chain-Risk-Intelligence-Platform-for-"
+    "Industrial-CI-CD-Pipelines"
+)
 
 # Get PAT from environment variable
 pat = os.getenv("GITHUB_TOKEN")

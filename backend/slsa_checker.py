@@ -5,14 +5,14 @@ Performs both static analysis of GitHub Actions workflow YAML files
 and dynamic provenance verification using slsa-verifier.
 
 Features:
-- Static: Detects unpinned actions, untrusted runners, missing attest steps, etc.
+- Static: Detects unpinned actions,
+untrusted runners, missing attest steps, etc.
 - Dynamic: Verifies actual provenance artifact (Level 3+)
 - Returns structured result ready for API response and dashboard
 """
 
 import logging
 import subprocess
-from pathlib import Path
 from typing import Dict, List, Any, Optional
 
 from ruamel.yaml import YAML, YAMLError
@@ -73,12 +73,14 @@ def static_slsa_analysis(workflow_dict: Dict[str, str]) -> Dict[str, Any]:
 
             # Missing jobs
             if "jobs" not in data:
-                issues.append({
-                    "file": filename,
-                    "type": "missing_jobs",
-                    "details": "Workflow has no jobs defined",
-                    "severity": "high"
-                })
+                issues.append(
+                    {
+                        "file": filename,
+                        "type": "missing_jobs",
+                        "details": "Workflow has no jobs defined",
+                        "severity": "high",
+                    }
+                )
                 continue
 
             # Analyze each job
@@ -87,13 +89,15 @@ def static_slsa_analysis(workflow_dict: Dict[str, str]) -> Dict[str, Any]:
                 runs_on = job.get("runs-on")
                 if isinstance(runs_on, str):
                     if "latest" in runs_on.lower():
-                        issues.append({
-                            "file": filename,
-                            "job": job_name,
-                            "type": "unpinned_runner",
-                            "details": f"uses '{runs_on}' – should be specific version or self-hosted",
-                            "severity": "medium"
-                        })
+                        issues.append(
+                            {
+                                "file": filename,
+                                "job": job_name,
+                                "type": "unpinned_runner",
+                                "details": f"uses '{runs_on}' – should be specific version or self-hosted",
+                                "severity": "medium",
+                            }
+                        )
                         suggestions.add(
                             "Replace 'runs-on: latest' with specific version or self-hosted label"
                         )
@@ -106,14 +110,16 @@ def static_slsa_analysis(workflow_dict: Dict[str, str]) -> Dict[str, Any]:
                     if uses and isinstance(uses, str):
                         # Unpinned action
                         if "@" not in uses or uses.endswith(("@main", "@master", "@head")):
-                            issues.append({
-                                "file": filename,
-                                "job": job_name,
-                                "step": step_name,
-                                "type": "unpinned_action",
-                                "details": f"uses: {uses}",
-                                "severity": "high"
-                            })
+                            issues.append(
+                                {
+                                    "file": filename,
+                                    "job": job_name,
+                                    "step": step_name,
+                                    "type": "unpinned_action",
+                                    "details": f"uses: {uses}",
+                                    "severity": "high",
+                                }
+                            )
                             suggestions.add(
                                 f"Pin action in '{job_name}' → '{step_name}': use SHA digest"
                             )
@@ -124,41 +130,47 @@ def static_slsa_analysis(workflow_dict: Dict[str, str]) -> Dict[str, Any]:
                             and "attest" not in uses.lower()
                             and "provenance" not in uses.lower()
                         ):
-                            issues.append({
-                                "file": filename,
-                                "job": job_name,
-                                "step": step_name,
-                                "type": "missing_attestation",
-                                "details": "No SLSA provenance generation step detected",
-                                "severity": "high"
-                            })
+                            issues.append(
+                                {
+                                    "file": filename,
+                                    "job": job_name,
+                                    "step": step_name,
+                                    "type": "missing_attestation",
+                                    "details": "No SLSA provenance generation step detected",
+                                    "severity": "high",
+                                }
+                            )
                             suggestions.add(
                                 f"Add SLSA provenance step in job '{job_name}', "
                                 "e.g. uses: slsa-framework/slsa-github-generator@v2"
                             )
 
         except YAMLError as e:
-            issues.append({
-                "file": filename,
-                "type": "yaml_parse_error",
-                "details": str(e),
-                "severity": "critical"
-            })
+            issues.append(
+                {
+                    "file": filename,
+                    "type": "yaml_parse_error",
+                    "details": str(e),
+                    "severity": "critical",
+                }
+            )
         except Exception as e:
             logger.exception(f"Unexpected error analyzing {filename}")
-            issues.append({
-                "file": filename,
-                "type": "analysis_error",
-                "details": str(e),
-                "severity": "critical"
-            })
+            issues.append(
+                {
+                    "file": filename,
+                    "type": "analysis_error",
+                    "details": str(e),
+                    "severity": "critical",
+                }
+            )
 
     level = estimate_slsa_level_from_static(issues)
 
     return {
         "level": level,
         "issues": issues,
-        "suggestions": list(set(suggestions))  # deduplicate
+        "suggestions": list(set(suggestions)),  # deduplicate
     }
 
 
