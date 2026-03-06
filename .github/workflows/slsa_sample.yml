@@ -30,7 +30,7 @@ jobs:
         run: |
           pip install flake8
           flake8 .
-          
+
       - name: Set environment
         run: echo "GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV    
 
@@ -44,6 +44,7 @@ jobs:
             --ignore=test.txt \
             --cov=backend \
             --cov-report=xml
+            -W ignore::DeprecationWarning
 
       - name: Upload code coverage
         uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de  # ratchet:codecov/codecov-action@v5
