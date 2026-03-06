@@ -2,13 +2,14 @@ from github import Github
 import yaml
 from typing import Dict
 
+
 def get_workflow_yaml(repo_url: str, github_pat: str = None) -> Dict[str, str]:
     """
     Fetch GitHub Actions workflow YAMLs for a repo.
 
     Args:
-        repo_url (str): Full repo URL, e.g. "https://github.com/owner/repo-name"
-        github_pat (str, optional): Personal Access Token if private repo.
+        repo_url: Full repo URL, e.g. "https://github.com/owner/repo-name"
+        github_pat: Personal Access Token if private repo (optional).
 
     Returns:
         Dict[str, str]: {workflow_filename: workflow_content}
@@ -32,7 +33,7 @@ def get_workflow_yaml(repo_url: str, github_pat: str = None) -> Dict[str, str]:
     workflows = {}
     try:
         contents = repo.get_contents(".github/workflows")
-    except:
+    except Exception:
         return {}  # No workflows found
 
     for file in contents:
@@ -42,7 +43,6 @@ def get_workflow_yaml(repo_url: str, github_pat: str = None) -> Dict[str, str]:
     return workflows
 
 
-# Optional helper: validate YAML
 def parse_yaml(yaml_str: str) -> Dict:
     """
     Convert YAML string to Python dict
