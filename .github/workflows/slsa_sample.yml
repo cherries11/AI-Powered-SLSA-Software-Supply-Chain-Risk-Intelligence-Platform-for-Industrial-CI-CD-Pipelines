@@ -1,5 +1,9 @@
 name: Python CI + SLSA Level 3
 
+permissions:
+  id-token: write      # ✅ for SLSA attest
+  contents: read       # ✅ for checkout
+
 on:
   push:
     branches: [main]
@@ -96,6 +100,9 @@ jobs:
   provenance:
     name: Generate SLSA Provenance
     runs-on: ubuntu-22.04
+    permissions:
+      id-token: write
+      contents: read
     needs: docker
     steps:
       - name: Checkout code
