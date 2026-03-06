@@ -145,3 +145,4 @@ if 'results' in st.session_state:
         file_name=f"scan_{results['scan_id']}.json",
         mime="application/json"
     )
+    
