@@ -302,4 +302,4 @@ if st.button("Clear Results & Scan New Repo", type="secondary"):
     if "results" in st.session_state:
         del st.session_state.results
     st.rerun()
-       
+      
