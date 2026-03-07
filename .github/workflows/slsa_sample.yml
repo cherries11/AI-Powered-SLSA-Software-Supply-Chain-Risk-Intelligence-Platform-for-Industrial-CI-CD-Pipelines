@@ -86,7 +86,7 @@ jobs:
           context: .
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/slsa-risk-app:latest
-          outputs: type=image,name=ghcr.io/${{ github.repository_owner }}/slsa-risk-app:latest,push=true
+
 
   sbom:
     name: Generate SBOM
@@ -122,13 +122,13 @@ jobs:
     name: Generate SLSA Provenance (Level 3)
     needs: [docker]
     permissions:
-      id-token: write
-      packages: write
-      actions: read
+      id-token: write   # Required for keyless signing
+      packages: write   # Required to push to GHCR
+      actions: read     # Required for workflow metadata
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
     with:
-      # Ensure this matches exactly where 'docker-build-push' sent the image
-      image: ghcr.io/${{ github.repository }}
+      # This matches your Docker log: ghcr.io/kamisara/slsa-risk-app
+      image: ghcr.io/${{ github.repository_owner }}/slsa-risk-app
       digest: ${{ needs.docker.outputs.digest }}
     secrets:
       registry-username: ${{ github.actor }}
