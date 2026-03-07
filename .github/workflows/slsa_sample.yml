@@ -126,27 +126,23 @@ jobs:
           path: sbom.json
 
   provenance:
-    name: Generate SLSA Provenance
+    name: Generate SLSA Provenance (Level 3)
     runs-on: ubuntu-22.04
     needs: docker
     permissions:
-      id-token: write
+      id-token: write     # for keyless signing
       contents: read
+      packages: write     # for pushing OCI artifact
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4  # ratchet:actions/checkout@v4
+        uses: actions/checkout@v4
 
-      - name: Debug digest
-        run: |
-          echo "Docker digest: ${{ needs.docker.outputs.digest }}"
-        
-      - name: Generate SLSA provenance
-        uses: actions/attest@v1
+      - name: Generate & push SLSA Provenance
+        uses: slsa-framework/slsa-github-generator@v2.0.0
         with:
-          subject-name: ${{ secrets.DOCKER_USERNAME }}/my-app
-          subject-digest: ${{ needs.docker.outputs.digest }}
-          predicate-type: https://slsa.dev/provenance/v0.2
-          push-to-registry: true
+          image: ${{ secrets.DOCKER_USERNAME }}/my-app:latest@${{ needs.docker.outputs.digest }}
+          registry-username: ${{ secrets.DOCKER_USERNAME }}
+          registry-password: ${{ secrets.DOCKER_PASSWORD }}
 
   sign-docker:
     name: Sign Docker Image (Keyless)
