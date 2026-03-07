@@ -246,7 +246,9 @@ if "results" in st.session_state:
         vulns = scan.get("vulnerabilities", [])
         if vulns:
             df = pd.DataFrame(vulns)
+
             def color_severity(val):
+
                 if val == "CRITICAL":
                     return 'background-color:#FF4B4B; color:white'
                 if val == "HIGH":
@@ -299,4 +301,4 @@ if "results" in st.session_state:
         if "results" in st.session_state:
             del st.session_state.results
         st.rerun()
-
+        
