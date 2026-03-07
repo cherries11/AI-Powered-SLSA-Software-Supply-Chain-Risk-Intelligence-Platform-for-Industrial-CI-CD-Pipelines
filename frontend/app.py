@@ -6,8 +6,10 @@ from datetime import datetime
 import time
 import plotly.graph_objects as go
 
+
 # ── Cyber-Industrial Minimalism Theme ──
-st.markdown("""
+st.markdown(
+    """
     <style>
     .stApp { background-color: #0E1117; color: #E0E0E0; }
     .stTextInput input {
@@ -46,7 +48,10 @@ st.markdown("""
     .issue-item { margin: 0.8rem 0; padding-left: 1rem; border-left: 3px solid #FFB800; }
     hr { border-color: #333; margin: 1.5rem 0; }
     </style>
-""", unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True
+)
+
 
 # ── Page Config ──
 st.set_page_config(
@@ -56,11 +61,20 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+
 # ── Hero Section ──
-st.markdown("<h1 style='text-align:center; color:#00F5FF; margin-bottom:0.3rem;'>SLSA Risk Intelligence</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align:center; color:#A0A0C0; margin-bottom:2rem;'>AI-Powered Supply Chain Security Scanner for Industrial CI/CD</p>", unsafe_allow_html=True)
+st.markdown(
+    "<h1 style='text-align:center; color:#00F5FF; margin-bottom:0.3rem;'>SLSA Risk Intelligence</h1>",
+    unsafe_allow_html=True
+)
+st.markdown(
+    "<p style='text-align:center; color:#A0A0C0; margin-bottom:2rem;'>AI-Powered Supply Chain Security Scanner for Industrial CI/CD</p>",
+    unsafe_allow_html=True
+)
+
 
 repo_url = st.text_input("", placeholder="https://github.com/owner/repository", label_visibility="collapsed")
+
 
 # ── Scan Trigger ──
 if st.button("Analyze Repository", type="primary", use_container_width=True):
@@ -78,7 +92,10 @@ if st.button("Analyze Repository", type="primary", use_container_width=True):
                 "Assembling intelligence report..."
             ]
             for step in steps:
-                placeholder.markdown(f"<div style='text-align:center; color:#00F5FF; font-size:1.1rem;'>{step}</div>", unsafe_allow_html=True)
+                placeholder.markdown(
+                    f"<div style='text-align:center; color:#00F5FF; font-size:1.1rem;'>{step}</div>",
+                    unsafe_allow_html=True
+                )
                 time.sleep(0.8)
             placeholder.empty()
 
@@ -135,6 +152,7 @@ if st.button("Analyze Repository", type="primary", use_container_width=True):
         st.session_state.results = results
         st.success("Analysis complete", icon="✅")
 
+
 # ── Results Display ──
 if "results" in st.session_state:
     r = st.session_state.results
@@ -151,7 +169,10 @@ if "results" in st.session_state:
         lvl = slsa.get("level")
         lvl_text = lvl if lvl is not None else "Pending"
         lvl_color = "#00F5FF" if lvl and lvl >= 3 else "#FFB800" if lvl == 2 else "#FF4B4B"
-        st.markdown(f"<div style='text-align:center;'><div class='badge' style='background:{lvl_color};'>SLSA LEVEL {lvl_text}</div></div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div style='text-align:center;'><div class='badge' style='background:{lvl_color};'>SLSA LEVEL {lvl_text}</div></div>",
+            unsafe_allow_html=True
+        )
 
     # AI Risk Gauge
     with cols[1]:
@@ -174,7 +195,12 @@ if "results" in st.session_state:
                     'threshold': {'line': {'color': risk_color, 'width': 5}, 'thickness': 0.8, 'value': score}
                 }
             ))
-            fig.update_layout(height=160, margin=dict(l=0,r=0,t=30,b=0), paper_bgcolor="rgba(0,0,0,0)", font_color="#E0E0E0")
+            fig.update_layout(
+                height=160,
+                margin=dict(l=0, r=0, t=30, b=0),
+                paper_bgcolor="rgba(0,0,0,0)",
+                font_color="#E0E0E0"
+            )
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.metric("AI Risk Score", "Pending")
@@ -182,13 +208,20 @@ if "results" in st.session_state:
     # Dependencies
     with cols[2]:
         sbom = scan.get("sbom_summary", {})
-        st.metric("Total Dependencies", sbom.get("total_dependencies") or "N/A", delta=f"{sbom.get('outdated') or 0} outdated")
+        st.metric(
+            "Total Dependencies",
+            sbom.get("total_dependencies") or "N/A",
+            delta=f"{sbom.get('outdated') or 0} outdated"
+        )
 
     # Vulnerabilities
     with cols[3]:
         vulns_count = len(scan.get("vulnerabilities", []))
         badge_class = "critical" if vulns_count > 0 else "safe"
-        st.markdown(f"<div style='text-align:center;'><div class='badge {badge_class}'>{vulns_count} Vulnerabilities</div></div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div style='text-align:center;'><div class='badge {badge_class}'>{vulns_count} Vulnerabilities</div></div>",
+            unsafe_allow_html=True
+        )
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -214,11 +247,17 @@ if "results" in st.session_state:
         if vulns:
             df = pd.DataFrame(vulns)
             def color_severity(val):
-                if val == "CRITICAL": return 'background-color:#FF4B4B; color:white'
-                if val == "HIGH": return 'background-color:#FFB800; color:black'
-                if val == "MEDIUM": return 'background-color:#FFD700; color:black'
+                if val == "CRITICAL":
+                    return 'background-color:#FF4B4B; color:white'
+                if val == "HIGH":
+                    return 'background-color:#FFB800; color:black'
+                if val == "MEDIUM":
+                    return 'background-color:#FFD700; color:black'
                 return ''
-            st.dataframe(df.style.map(color_severity, subset=["severity"]), use_container_width=True)
+            st.dataframe(
+                df.style.map(color_severity, subset=["severity"]),
+                use_container_width=True
+            )
         else:
             st.info("No vulnerabilities detected in this scan.")
         st.markdown("</div>", unsafe_allow_html=True)
@@ -228,7 +267,10 @@ if "results" in st.session_state:
         st.subheader("SLSA Issues & Suggestions")
         if slsa.get("issues"):
             for issue in slsa["issues"]:
-                st.markdown(f"<div class='issue-item'>⚠ **{issue.get('type','Unknown')}** (step: {issue.get('step','N/A')})<br>{issue.get('details','')}</div>", unsafe_allow_html=True)
+                st.markdown(
+                    f"<div class='issue-item'>⚠ **{issue.get('type','Unknown')}** (step: {issue.get('step','N/A')})<br>{issue.get('details','')}</div>",
+                    unsafe_allow_html=True
+                )
         else:
             st.success("No SLSA compliance issues found.")
 
@@ -244,7 +286,12 @@ if "results" in st.session_state:
 
         st.subheader("Export Report")
         json_str = json.dumps(r, indent=2)
-        st.download_button("Download Full JSON Report", json_str, f"slsa-report-{r['scan_id'][:8]}.json", "application/json")
+        st.download_button(
+            "Download Full JSON Report",
+            json_str,
+            f"slsa-report-{r['scan_id'][:8]}.json",
+            "application/json"
+        )
         st.markdown("</div>", unsafe_allow_html=True)
 
     # ── Reset ──
@@ -252,3 +299,4 @@ if "results" in st.session_state:
         if "results" in st.session_state:
             del st.session_state.results
         st.rerun()
+
