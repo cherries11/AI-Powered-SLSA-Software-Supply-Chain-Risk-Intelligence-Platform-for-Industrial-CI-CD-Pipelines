@@ -58,12 +58,16 @@ jobs:
           fail_ci_if_error: true
 
   docker:
-    name: Build Docker image
+    name: Build & Push Docker Image
     runs-on: ubuntu-22.04
     needs: build
+
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # ratchet:actions/checkout@v4
+        uses: actions/checkout@v4
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
@@ -71,14 +75,13 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build Docker image
+      - name: Build and Push Docker image
+        id: build
         run: |
-          docker build -t my-app:latest .
-          docker tag my-app:latest ${{ secrets.DOCKER_USERNAME }}/my-app:latest
-
-      - name: Push Docker image
-        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/my-app:latest .
           docker push ${{ secrets.DOCKER_USERNAME }}/my-app:latest
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${{ secrets.DOCKER_USERNAME }}/my-app:latest | cut -d@ -f2)
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
 
   sbom:
     name: Generate SBOM
@@ -96,24 +99,47 @@ jobs:
         run: |
           syft ${{ secrets.DOCKER_USERNAME }}/my-app:latest -o spdx-json > sbom.json
           cat sbom.json
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.json          
 
   provenance:
     name: Generate SLSA Provenance
     runs-on: ubuntu-22.04
+    needs: docker
+
     permissions:
       id-token: write
       contents: read
-    needs: docker
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # ratchet:actions/checkout@v4
 
+    steps:
       - name: Generate SLSA provenance
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26  # ratchet:actions/attest@v4
+        uses: actions/attest@v1
         with:
-          subject-name: my-app:latest
-          subject-digest: ${{ steps.build.outputs.digest }}  # you'll need to capture digest from docker build
+          subject-name: ${{ secrets.DOCKER_USERNAME }}/my-app
+          subject-digest: ${{ needs.docker.outputs.digest }}
+          predicate-type: https://slsa.dev/provenance/v0.2
           push-to-registry: true
+          
+
+  sign-docker:
+    name: Sign Docker Image
+    runs-on: ubuntu-22.04
+    needs: docker
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign Docker Image (Keyless)
+        run: |
+          cosign sign ${{ secrets.DOCKER_USERNAME }}/my-app:latest
 
   verify:
     name: Verify SBOM & Provenance
