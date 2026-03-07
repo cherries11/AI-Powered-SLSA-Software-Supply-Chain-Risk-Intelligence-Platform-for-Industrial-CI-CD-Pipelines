@@ -14,6 +14,13 @@ on:
   workflow_dispatch:
 
 jobs:
+
+  dummy-warmup:
+    name: Warm-up remote workflow cache
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Dummy job to force GitHub to index remote reusable workflow"
+
   build:
     name: Build & Test
     runs-on: ubuntu-22.04
@@ -113,15 +120,15 @@ jobs:
 
   provenance:
     name: Generate SLSA Provenance (Level 3)
-    needs: [docker] # Required to get the digest
+    needs: [docker]
     permissions:
-      id-token: write   # Required for keyless signing
-      packages: write   # Required to push to GHCR
-      actions: read     # Required for workflow metadata
-    # The 'uses' must be at the job level, NOT inside 'steps'
+      id-token: write
+      packages: write
+      actions: read
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
     with:
-      image: ghcr.io/${{ github.repository_owner }}/slsa-risk-app
+      # Ensure this matches exactly where 'docker-build-push' sent the image
+      image: ghcr.io/${{ github.repository }}
       digest: ${{ needs.docker.outputs.digest }}
     secrets:
       registry-username: ${{ github.actor }}
