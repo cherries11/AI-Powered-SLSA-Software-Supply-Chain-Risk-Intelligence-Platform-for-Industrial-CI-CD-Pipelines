@@ -111,24 +111,21 @@ jobs:
           name: sbom
           path: sbom.json
 
-  # provenance:
-  #   name: Generate SLSA Provenance (Level 3)
-  #   runs-on: ubuntu-22.04
-  #   needs: docker
-  #   permissions:
-  #     id-token: write
-  #     contents: read
-  #     packages: write
-  #   steps:
-  #     - name: Checkout repo
-  #       uses: actions/checkout@v4
-
-  #     - name: Generate SLSA Provenance
-  #       uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
-  #       with:
-  #         image: ghcr.io/${{ github.repository_owner }}/slsa-risk-app:latest@${{ needs.docker.outputs.digest }}
-  #         registry-username: ${{ secrets.DOCKER_USERNAME }}
-          # registry-password: ${{ secrets.DOCKER_PASSWORD }}
+  provenance:
+    name: Generate SLSA Provenance (Level 3)
+    needs: [docker] # Required to get the digest
+    permissions:
+      id-token: write   # Required for keyless signing
+      packages: write   # Required to push to GHCR
+      actions: read     # Required for workflow metadata
+    # The 'uses' must be at the job level, NOT inside 'steps'
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
+    with:
+      image: ghcr.io/${{ github.repository_owner }}/slsa-risk-app
+      digest: ${{ needs.docker.outputs.digest }}
+    secrets:
+      registry-username: ${{ github.actor }}
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
 
   sign-docker:
     name: Sign Docker Image (Keyless)
@@ -156,7 +153,7 @@ jobs:
   verify:
     name: Verify SBOM & Provenance
     runs-on: ubuntu-22.04
-    needs: [sbom, ]
+    needs: [sbom, provenance]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -181,7 +178,7 @@ jobs:
   release-artifacts:
     name: Release Artifacts
     runs-on: ubuntu-22.04
-    needs: [sbom,  sign-docker]
+    needs: [sbom, provenance, sign-docker]
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - name: Checkout
