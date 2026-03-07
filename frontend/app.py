@@ -99,11 +99,11 @@ if st.button("Analyze Repository", type="primary", use_container_width=True):
                 time.sleep(0.8)
             placeholder.empty()
 
-        # ── Mock response matching your exact JSON schema ──
+        # ── Mock response fully matching the JSON schema ──
         results = {
             "status": "success",
             "scan_id": str(uuid.uuid4()),
-            "repo": repo_url.split("github.com/")[-1].rstrip("/"),
+            "repo": repo_url.split("github.com/")[-1].rstrip("/") if "github.com/" in repo_url else "unknown/repo",
             "branch": "main",
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "slsa": {
@@ -230,15 +230,85 @@ if "results" in st.session_state:
 
     with tab1:
         st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown(f"**Assessment:** {ai.get('explanation') or 'No AI explanation available yet'}")
+
+        # AI Risk Gauge (repeated in tab)
+        st.subheader("AI Risk Score")
+        score = ai.get("score") or "N/A"
+        level = ai.get("level") or "Pending"
+        color = "red" if level == "HIGH" else "orange" if level == "MEDIUM" else "green"
+        st.metric("Score", f"{score}/100", delta_color="inverse")
+        st.markdown(f"<p style='color:{color}; font-weight:bold; font-size:1.2rem;'>{level} Risk</p>", unsafe_allow_html=True)
+
+        # Improved Breakdown Bar Chart (Plotly - aesthetic & interactive)
+        st.subheader("Risk Factor Breakdown")
+        if ai.get("top_factors"):
+            factors = [f["factor"] for f in ai["top_factors"]]
+            weights = [f["weight"] for f in ai["top_factors"]]
+
+            # Sort descending
+            sorted_data = sorted(zip(factors, weights), key=lambda x: x[1], reverse=True)
+            sorted_factors, sorted_weights = zip(*sorted_data)
+
+            fig = go.Figure()
+
+            fig.add_trace(go.Bar(
+                y=sorted_factors,
+                x=sorted_weights,
+                orientation='h',
+                marker=dict(
+                    color=sorted_weights,
+                    colorscale='Bluered_r',  # cyan to deep blue-red gradient
+                    line=dict(color='#00F5FF', width=2)  # solid cyan border
+                ),
+                text=[f"{w}%" for w in sorted_weights],
+                textposition='auto',
+                textfont=dict(color="#0E1117", size=12),
+                hovertemplate="%{y}: <b>%{x}%</b> impact<extra></extra>",
+                marker_opacity=0.92
+            ))
+
+            fig.update_layout(
+                title="Contribution to Overall Risk Score",
+                title_x=0.5,
+                title_font=dict(size=18, color="#00F5FF"),
+                xaxis_title="Weight (%)",
+                yaxis_title="Risk Factor",
+                height=320,
+                margin=dict(l=20, r=20, t=60, b=40),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#E0E0E0", family="Segoe UI, sans-serif", size=12),
+                xaxis=dict(
+                    gridcolor="#444",
+                    zerolinecolor="#555",
+                    range=[0, max(sorted_weights) * 1.15 if sorted_weights else 100]
+                ),
+                yaxis=dict(
+                    gridcolor="#444",
+                    zeroline=False,
+                    autorange="reversed"
+                ),
+                bargap=0.25,
+                bargroupgap=0.1
+            )
+
+            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+        else:
+            st.info("No risk factor breakdown available yet.")
+
+        # SHAP-Lite Explanations
+        st.subheader("AI Explanation")
+        st.write(ai.get("explanation") or "No detailed explanation available yet.")
         if ai.get("anomalies"):
-            st.markdown("**Anomalies Detected**")
+            st.markdown("**Detected Anomalies**")
             for a in ai["anomalies"]:
                 st.markdown(f"→ {a}")
         if ai.get("top_factors"):
-            st.subheader("Top Risk Contributors")
-            df_factors = pd.DataFrame(ai["top_factors"])
-            st.bar_chart(df_factors.set_index("factor")["weight"], color="#FF4B4B")
+            max_factor = max(ai["top_factors"], key=lambda x: x["weight"])
+            st.markdown(
+                f"**Top contributor:** {max_factor['factor']} with {max_factor['weight']}% impact"
+            )
+
         st.markdown("</div>", unsafe_allow_html=True)
 
     with tab2:
@@ -288,18 +358,13 @@ if "results" in st.session_state:
 
         st.subheader("Export Report")
         json_str = json.dumps(r, indent=2)
-        st.download_button(
-            "Download Full JSON Report",
-            json_str,
-            f"slsa-report-{r['scan_id'][:8]}.json",
-            "application/json"
-        )
+        st.download_button("Download Full JSON Report", json_str, f"slsa-report-{r['scan_id'][:8]}.json", "application/json")
         st.markdown("</div>", unsafe_allow_html=True)
 
 
-# ── Reset ──
-if st.button("Clear Results & Scan New Repo", type="secondary"):
-    if "results" in st.session_state:
-        del st.session_state.results
-    st.rerun()
-      
+    # ── Reset button (only visible after scan) ──
+    if st.button("Clear Results & Scan New Repo", type="secondary"):
+        if "results" in st.session_state:
+            del st.session_state.results
+        st.rerun()
+             
