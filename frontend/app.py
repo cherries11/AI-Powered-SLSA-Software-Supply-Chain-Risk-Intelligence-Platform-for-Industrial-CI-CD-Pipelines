@@ -248,7 +248,6 @@ if "results" in st.session_state:
             df = pd.DataFrame(vulns)
 
             def color_severity(val):
-
                 if val == "CRITICAL":
                     return 'background-color:#FF4B4B; color:white'
                 if val == "HIGH":
@@ -256,6 +255,7 @@ if "results" in st.session_state:
                 if val == "MEDIUM":
                     return 'background-color:#FFD700; color:black'
                 return ''
+
             st.dataframe(
                 df.style.map(color_severity, subset=["severity"]),
                 use_container_width=True
@@ -296,9 +296,10 @@ if "results" in st.session_state:
         )
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # ── Reset ──
-    if st.button("Clear Results & Scan New Repo", type="secondary"):
-        if "results" in st.session_state:
-            del st.session_state.results
-        st.rerun()
-        
+
+# ── Reset ──
+if st.button("Clear Results & Scan New Repo", type="secondary"):
+    if "results" in st.session_state:
+        del st.session_state.results
+    st.rerun()
+       
