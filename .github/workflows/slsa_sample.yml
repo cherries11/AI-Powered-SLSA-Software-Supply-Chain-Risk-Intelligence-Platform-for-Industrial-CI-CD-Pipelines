@@ -1,8 +1,9 @@
 name: Python CI + SLSA Level 3
 
 permissions:
-  id-token: write      # ✅ for SLSA attest
-  contents: read       # ✅ for checkout
+  id-token: write   # required for keyless signing & attest
+  contents: read    # required for checkout
+  packages: write   # optional – if pushing to ghcr.io later
 
 on:
   push:
@@ -18,7 +19,6 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # ratchet:actions/checkout@v4
-        # SHA from https://github.com/actions/checkout/releases/tag/v4.2.2
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # ratchet:actions/setup-python@v5
@@ -35,20 +35,17 @@ jobs:
           pip install flake8
           flake8 .
 
-      - name: Set environment
-        run: echo "GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV    
-
       - name: Run tests
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PYTHONPATH: ${{ github.workspace }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           pip install pytest pytest-cov
           PYTHONPATH=. pytest tests/ \
-             --ignore=test.txt \
-             --cov=backend \
-             --cov-report=xml \
-             -W ignore::DeprecationWarning
+            --ignore=test.txt \
+            --cov=backend \
+            --cov-report=xml \
+            -W ignore::DeprecationWarning
 
       - name: Upload code coverage
         uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de  # ratchet:codecov/codecov-action@v5
@@ -58,63 +55,59 @@ jobs:
           fail_ci_if_error: true
 
   docker:
-    name: Build & Push Docker Image
+    name: Build Docker image
     runs-on: ubuntu-22.04
     needs: build
-
     outputs:
       digest: ${{ steps.build.outputs.digest }}
-
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # ratchet:actions/checkout@v4
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Build and Push Docker image
+      - name: Build Docker image
         id: build
         run: |
           docker build -t ${{ secrets.DOCKER_USERNAME }}/my-app:latest .
-          docker push ${{ secrets.DOCKER_USERNAME }}/my-app:latest
-          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${{ secrets.DOCKER_USERNAME }}/my-app:latest | cut -d@ -f2)
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${{ secrets.DOCKER_USERNAME }}/my-app:latest | cut -d'@' -f2)
           echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+
+      - name: Test Docker container
+        run: |
+          docker run --rm ${{ secrets.DOCKER_USERNAME }}/my-app:latest python --version
 
   sbom:
     name: Generate SBOM
     runs-on: ubuntu-22.04
     needs: docker
     steps:
+      - name: Checkout code
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # ratchet:actions/checkout@v4
+
       - name: Install Syft
         uses: anchore/sbom-action/download-syft@17ae1740179002c89186b61233e0f892c3118b11  # ratchet:anchore/sbom-action/download-syft@v0.22.2
-
-      - name: Pull Docker image
-        run: |
-          docker pull ${{ secrets.DOCKER_USERNAME }}/my-app:latest
 
       - name: Generate SBOM
         run: |
           syft ${{ secrets.DOCKER_USERNAME }}/my-app:latest -o spdx-json > sbom.json
           cat sbom.json
+
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@v4
         with:
           name: sbom
-          path: sbom.json          
+          path: sbom.json
 
   provenance:
     name: Generate SLSA Provenance
     runs-on: ubuntu-22.04
     needs: docker
-
     permissions:
       id-token: write
       contents: read
-
     steps:
+      - name: Checkout code
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # ratchet:actions/checkout@v4
+
       - name: Generate SLSA provenance
         uses: actions/attest@v1
         with:
@@ -122,20 +115,17 @@ jobs:
           subject-digest: ${{ needs.docker.outputs.digest }}
           predicate-type: https://slsa.dev/provenance/v0.2
           push-to-registry: true
-          
 
   sign-docker:
-    name: Sign Docker Image
+    name: Sign Docker Image (Keyless)
     runs-on: ubuntu-22.04
     needs: docker
-
     permissions:
       id-token: write
       contents: read
-
     steps:
       - name: Install Cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad  # ratchet:sigstore/cosign-installer@v4.0.0
 
       - name: Sign Docker Image (Keyless)
         run: |
@@ -154,23 +144,11 @@ jobs:
 
       - name: Verify Docker Image Attestation
         run: |
-          cosign verify-attestation --key cosign.pub my-app:latest
+          cosign verify ${{ secrets.DOCKER_USERNAME }}/my-app:latest
 
       - name: Verify SBOM Integrity
         run: |
           slsa-verifier verify-artifacts ./provenance.json --materials ./sbom.json
-
-  sign-docker:
-    name: Sign Docker Image
-    runs-on: ubuntu-22.04
-    needs: docker
-    steps:
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad  # ratchet:sigstore/cosign-installer@v4.0.0
-
-      - name: Sign Docker Image
-        run: |
-          cosign sign --key env://COSIGN_PRIVATE_KEY my-app:latest
 
   release-artifacts:
     name: Release Artifacts
