@@ -123,8 +123,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Generate SLSA Provenance
-        uses: slsa-framework/slsa-github-generator@v2.0.0  # ← Valid full version tag
+      - name: Generate & push SLSA Provenance
+        uses: slsa-framework/slsa-github-generator@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a
         with:
           artifact-path: ghcr.io/${{ github.repository_owner }}/slsa-risk-app:latest@${{ needs.docker.outputs.digest }}
           registry-username: ${{ github.actor }}
