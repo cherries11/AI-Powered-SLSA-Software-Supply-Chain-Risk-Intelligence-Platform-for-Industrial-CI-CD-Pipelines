@@ -130,15 +130,15 @@ jobs:
     runs-on: ubuntu-22.04
     needs: docker
     permissions:
-      id-token: write     # for keyless signing
+      id-token: write
       contents: read
-      packages: write     # for pushing OCI artifact
+      packages: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Generate & push SLSA Provenance
-        uses: slsa-framework/slsa-github-generator@v2.0.0
+        uses: slsa-framework/slsa-github-generator@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a
         with:
           image: ${{ secrets.DOCKER_USERNAME }}/my-app:latest@${{ needs.docker.outputs.digest }}
           registry-username: ${{ secrets.DOCKER_USERNAME }}
