@@ -138,7 +138,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Generate & push SLSA Provenance
-        uses: slsa-framework/slsa-github-generator@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a
+        uses: slsa-framework/slsa-github-generator@v2.1.0
         with:
           image: ${{ secrets.DOCKER_USERNAME }}/my-app:latest@${{ needs.docker.outputs.digest }}
           registry-username: ${{ secrets.DOCKER_USERNAME }}
