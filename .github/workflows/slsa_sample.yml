@@ -156,7 +156,7 @@ jobs:
   verify:
     name: Verify SBOM & Provenance
     runs-on: ubuntu-22.04
-    needs: [sbom, provenance]
+    needs: [sbom, ]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -181,7 +181,7 @@ jobs:
   release-artifacts:
     name: Release Artifacts
     runs-on: ubuntu-22.04
-    needs: [sbom, provenance, sign-docker]
+    needs: [sbom,  sign-docker]
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - name: Checkout
