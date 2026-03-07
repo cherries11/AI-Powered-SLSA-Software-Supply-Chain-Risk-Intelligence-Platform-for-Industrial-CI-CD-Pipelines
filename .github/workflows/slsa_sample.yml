@@ -1,10 +1,10 @@
 name: Python CI + SLSA Level 3
 
 permissions:
-  id-token: write          # Required for keyless signing & attestations
-  contents: read           # Required for checkout
-  packages: write          # Required for pushing to GHCR (if used)
-  attestations: write      # For SLSA attestations
+  id-token: write          # for keyless signing & attestations
+  contents: read           # for checkout
+  packages: write          # for pushing to GHCR
+  attestations: write      # for SLSA attestations
 
 on:
   push:
@@ -46,14 +46,14 @@ jobs:
             --ignore=test.txt \
             --cov=backend \
             --cov-report=xml \
-            -W ignore::DeprecationWarning || true  # non-fatal
+            -W ignore::DeprecationWarning || true
 
       - name: Upload code coverage
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.xml
-          fail_ci_if_error: false  # Don't block on coverage upload
+          fail_ci_if_error: false
 
   docker:
     name: Build & Push Docker Image
@@ -65,21 +65,21 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Log in to GitHub Container Registry (GHCR)
+      - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and Push Docker image
+      - name: Build and Push Docker image (lowercase name)
         id: build-and-push
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ github.repository }}/my-app:latest
-          outputs: type=image,name=ghcr.io/${{ github.repository }}/my-app:latest,push=true
+          tags: ghcr.io/${{ github.repository_owner }}/slsa-risk-app:latest
+          outputs: type=image,name=ghcr.io/${{ github.repository_owner }}/slsa-risk-app:latest,push=true
 
   sbom:
     name: Generate SBOM
@@ -94,7 +94,7 @@ jobs:
 
       - name: Generate SBOM
         run: |
-          syft ghcr.io/${{ github.repository }}/my-app:latest@${{ needs.docker.outputs.digest }} \
+          syft ghcr.io/${{ github.repository_owner }}/slsa-risk-app:latest@${{ needs.docker.outputs.digest }} \
             -o spdx-json > sbom.json
           cat sbom.json
 
@@ -119,8 +119,7 @@ jobs:
       - name: Generate SLSA Provenance
         uses: slsa-framework/slsa-github-generator@v2
         with:
-          artifact-path: ghcr.io/${{ github.repository }}/my-app:latest@${{ needs.docker.outputs.digest }}
-          # Optional: if you want to push provenance to GHCR
+          artifact-path: ghcr.io/${{ github.repository_owner }}/slsa-risk-app:latest@${{ needs.docker.outputs.digest }}
           registry-username: ${{ github.actor }}
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
@@ -145,7 +144,7 @@ jobs:
 
       - name: Sign Docker Image (Keyless)
         run: |
-          cosign sign --yes ghcr.io/${{ github.repository }}/my-app:latest@${{ needs.docker.outputs.digest }}
+          cosign sign --yes ghcr.io/${{ github.repository_owner }}/slsa-risk-app:latest@${{ needs.docker.outputs.digest }}
 
   verify:
     name: Verify SBOM & Provenance
@@ -166,7 +165,7 @@ jobs:
 
       - name: Verify Docker Image Attestation
         run: |
-          cosign verify ghcr.io/${{ github.repository }}/my-app:latest@${{ needs.docker.outputs.digest }}
+          cosign verify ghcr.io/${{ github.repository_owner }}/slsa-risk-app:latest@${{ needs.docker.outputs.digest }}
 
       - name: Verify SBOM Integrity
         run: |
@@ -176,7 +175,7 @@ jobs:
     name: Release Artifacts
     runs-on: ubuntu-22.04
     needs: [sbom, provenance, sign-docker]
-    if: startsWith(github.ref, 'refs/tags/')  # Only run on tags
+    if: startsWith(github.ref, 'refs/tags/')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
