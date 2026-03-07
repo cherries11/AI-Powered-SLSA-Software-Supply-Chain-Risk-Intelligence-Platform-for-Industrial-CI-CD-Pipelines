@@ -3,7 +3,9 @@ name: Python CI + SLSA Level 3
 permissions:
   id-token: write   # required for keyless signing & attest
   contents: read    # required for checkout
-  packages: write   # optional – if pushing to ghcr.io later
+  packages: write 
+  attestations: write
+
 
 on:
   push:
@@ -77,7 +79,7 @@ jobs:
           docker push ${{ secrets.DOCKER_USERNAME }}/my-app:latest
           DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${{ secrets.DOCKER_USERNAME }}/my-app:latest | cut -d'@' -f2)
           echo "digest=$DIGEST" >> $GITHUB_OUTPUT
-          
+
 
   sbom:
     name: Generate SBOM
@@ -110,8 +112,12 @@ jobs:
       contents: read
     steps:
       - name: Checkout code
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # ratchet:actions/checkout@v4
+        uses: actions/checkout@v4  # ratchet:actions/checkout@v4
 
+      - name: Debug digest
+        run: |
+          echo "Docker digest: ${{ needs.docker.outputs.digest }}"
+        
       - name: Generate SLSA provenance
         uses: actions/attest@v1
         with:
