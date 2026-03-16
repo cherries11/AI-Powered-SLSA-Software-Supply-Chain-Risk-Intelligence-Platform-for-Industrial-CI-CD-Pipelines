@@ -1,0 +1,8 @@
+total_dependencies
+direct_dependencies
+outdated_count
+critical_count
+high_count
+medium_count
+low_count
+total_vulns
