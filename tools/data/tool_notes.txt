@@ -1,0 +1,21 @@
+SYFT NOTES:
+- Creates SBOM (Software Bill of Materials)
+- Command: syft dir:. -o json
+- Key data: "artifacts" array with package names and versions
+- Use case: Get list of all dependencies
+
+TRIVY NOTES:
+- Finds vulnerabilities
+- Command: trivy fs -f json .
+- Key data: "Vulnerabilities" array with severity, CVE IDs
+- Severity levels: CRITICAL, HIGH, MEDIUM, LOW
+- Use case: Count vulnerabilities by severity
+
+PIP-AUDIT NOTES:
+- Python-specific vulnerability scanner
+- Command: pip-audit --format json .
+- Simpler output than Trivy
+- Use case: Python package vulnerabilities
+
+TEST REPO USED: https://github.com/pallets/flask
+DATE TESTED: [today's date]
