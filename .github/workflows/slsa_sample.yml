@@ -235,7 +235,7 @@ jobs:
   verify:
     name: Verify SBOM & Provenance
     runs-on: ubuntu-22.04
-    needs: [sbom, provenance]
+    needs: [sbom, provenance, docker]  # ← ADD docker HERE
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -265,7 +265,7 @@ jobs:
         run: |
           echo "Provenance content:"
           cat provenance.json | jq .
-          
+
   release-artifacts:
     name: Release Artifacts
     runs-on: ubuntu-22.04
