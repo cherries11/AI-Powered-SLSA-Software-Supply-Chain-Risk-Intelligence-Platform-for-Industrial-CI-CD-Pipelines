@@ -2,11 +2,17 @@ import streamlit as st
 import pandas as pd
 import json
 import uuid
+import requests
 from datetime import datetime
 import time
 import plotly.graph_objects as go
 import plotly.express as px
 
+# ==================== CONFIG ====================
+USE_REAL_BACKEND = False   # ← Change to True when backend is ready
+BACKEND_URL = "http://backend:8000/api/v1/scan"
+
+# ===============================================
 
 # ── Cyber-Industrial Minimalism Theme ──
 st.markdown(
@@ -97,72 +103,99 @@ if st.button("Analyze Repository", type="primary", use_container_width=True):
                     f"<div style='text-align:center; color:#00F5FF; font-size:1.1rem;'>{step}</div>",
                     unsafe_allow_html=True
                 )
-                time.sleep(0.8)
+                time.sleep(0.7)
             placeholder.empty()
 
-        # ── Mock response fully matching the JSON schema ──
-        results = {
-            "status": "success",
-            "scan_id": str(uuid.uuid4()),
-            "repo": repo_url.split("github.com/")[-1].rstrip("/") if "github.com/" in repo_url else "unknown/repo",
-            "branch": "main",
-            "timestamp": datetime.utcnow().isoformat() + "Z",
-            "slsa": {
-                "level": 2,
-                "issues": [
-                    {"type": "unpinned_action", "step": "checkout", "details": "uses: actions/checkout@v3"}
-                ],
-                "suggestions": [
-                    "Pin all actions to full SHA256 digest",
-                    "Replace ubuntu-latest with specific runner version"
-                ]
-            },
-            "scan": {
-                "sbom_summary": {
-                    "total_dependencies": 147,
-                    "direct": 32,
-                    "outdated": 8
+        results = None
+
+        if USE_REAL_BACKEND:
+            try:
+                response = requests.post(
+                    BACKEND_URL,
+                    json={"repo_url": repo_url, "branch": "main"},
+                    timeout=90
+                )
+                
+                if response.status_code == 200:
+                    results = response.json()
+                    st.success("Real backend response received", icon="✅")
+                elif response.status_code == 400:
+                    st.error("Invalid request. Please check the repository URL.")
+                    results = None
+                elif response.status_code == 403:
+                    st.error("Access denied. Private repository may require a valid GitHub PAT.")
+                    results = None
+                else:
+                    st.warning(f"Backend returned error {response.status_code}. Using mock data.")
+                    results = None
+                    
+            except requests.exceptions.ConnectionError:
+                st.warning("Backend is not running or unreachable. Using mock data as fallback.")
+                results = None
+            except requests.exceptions.Timeout:
+                st.warning("Backend request timed out. Using mock data.")
+                results = None
+            except Exception as e:
+                st.warning(f"Unexpected error connecting to backend: {e}. Using mock data.")
+                results = None
+
+        # Fallback to mock data if backend is disabled or failed
+        if results is None:
+            results = {
+                "status": "success",
+                "scan_id": str(uuid.uuid4()),
+                "repo": repo_url.split("github.com/")[-1].rstrip("/") if "github.com/" in repo_url else "unknown/repo",
+                "branch": "main",
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "slsa": {
+                    "level": 2,
+                    "issues": [
+                        {"type": "unpinned_action", "step": "checkout", "details": "uses: actions/checkout@v3"}
+                    ],
+                    "suggestions": [
+                        "Pin all actions to full SHA256 digest",
+                        "Replace ubuntu-latest with specific runner version"
+                    ]
                 },
-                "vulnerabilities": [
-                    {
-                        "package": "requests",
-                        "version": "2.25.0",
-                        "severity": "CRITICAL",
-                        "cve": "CVE-2023-1234",
-                        "description": "Remote code execution via crafted URL"
+                "scan": {
+                    "sbom_summary": {
+                        "total_dependencies": 147,
+                        "direct": 32,
+                        "outdated": 8
                     },
-                    {
-                        "package": "urllib3",
-                        "version": "1.26.5",
-                        "severity": "HIGH",
-                        "cve": "CVE-2024-5678",
-                        "description": "HTTP request smuggling vulnerability"
-                    },
-                    {
-                        "package": "numpy",
-                        "version": "1.19.0",
-                        "severity": "MEDIUM",
-                        "cve": "CVE-2022-3456",
-                        "description": "Buffer overflow in array operations"
-                    }
-                ]
-            },
-            "ai_risk": {
-                "score": 78,
-                "level": "HIGH",
-                "explanation": "High risk due to 3 critical CVEs + anomaly: new untrusted action added recently",
-                "anomalies": [
-                    "Sudden dependency increase: +15 packages in last commit",
-                    "Unusual commit time: 03:00 AM UTC"
-                ],
-                "top_factors": [
-                    {"factor": "critical_vulns", "weight": 45},
-                    {"factor": "slsa_level", "weight": 30},
-                    {"factor": "anomaly_score", "weight": 25}
-                ]
-            },
-            "errors": []
-        }
+                    "vulnerabilities": [
+                        {
+                            "package": "requests",
+                            "version": "2.25.0",
+                            "severity": "CRITICAL",
+                            "cve": "CVE-2023-1234",
+                            "description": "Remote code execution via crafted URL"
+                        },
+                        {
+                            "package": "urllib3",
+                            "version": "1.26.5",
+                            "severity": "HIGH",
+                            "cve": "CVE-2024-5678",
+                            "description": "HTTP request smuggling vulnerability"
+                        }
+                    ]
+                },
+                "ai_risk": {
+                    "score": 78,
+                    "level": "HIGH",
+                    "explanation": "High risk due to 3 critical CVEs + anomaly: new untrusted action added recently",
+                    "anomalies": [
+                        "Sudden dependency increase: +15 packages in last commit",
+                        "Unusual commit time: 03:00 AM UTC"
+                    ],
+                    "top_factors": [
+                        {"factor": "critical_vulns", "weight": 45},
+                        {"factor": "slsa_level", "weight": 30},
+                        {"factor": "anomaly_score", "weight": 25}
+                    ]
+                },
+                "errors": []
+            }
 
         st.session_state.results = results
         st.success("Analysis complete", icon="✅")
@@ -179,7 +212,6 @@ if "results" in st.session_state:
     st.markdown("<div class='card'>", unsafe_allow_html=True)
     cols = st.columns(4)
 
-    # SLSA Level
     with cols[0]:
         lvl = slsa.get("level")
         lvl_text = lvl if lvl is not None else "Pending"
@@ -189,7 +221,6 @@ if "results" in st.session_state:
             unsafe_allow_html=True
         )
 
-    # AI Risk Gauge
     with cols[1]:
         score = ai.get("score")
         if score is not None:
@@ -220,7 +251,6 @@ if "results" in st.session_state:
         else:
             st.metric("AI Risk Score", "Pending")
 
-    # Dependencies
     with cols[2]:
         sbom = scan.get("sbom_summary", {})
         st.metric(
@@ -229,7 +259,6 @@ if "results" in st.session_state:
             delta=f"{sbom.get('outdated') or 0} outdated"
         )
 
-    # Vulnerabilities count
     with cols[3]:
         vulns_count = len(scan.get("vulnerabilities", []))
         badge_class = "critical" if vulns_count > 0 else "safe"
@@ -253,7 +282,6 @@ if "results" in st.session_state:
         st.metric("Score", f"{score}/100", delta_color="inverse")
         st.markdown(f"<p style='color:{color}; font-weight:bold; font-size:1.2rem;'>{level} Risk</p>", unsafe_allow_html=True)
 
-        # Risk Factor Breakdown (Plotly)
         st.subheader("Risk Factor Breakdown")
         if ai.get("top_factors"):
             factors = [f["factor"] for f in ai["top_factors"]]
@@ -293,7 +321,6 @@ if "results" in st.session_state:
         else:
             st.info("No risk factor breakdown available yet.")
 
-        # SHAP-Lite Explanations
         st.subheader("AI Explanation")
         st.write(ai.get("explanation") or "No detailed explanation available yet.")
         if ai.get("anomalies"):
@@ -326,16 +353,10 @@ if "results" in st.session_state:
                 use_container_width=True
             )
 
-            # === Step 3.4: Vulnerability Heatmap (Severity by Package) ===
+            # Vulnerability Heatmap
             st.subheader("Vulnerability Heatmap")
-            if len(vulns) > 1:
-                # Create pivot table for heatmap: packages vs severity count
-                pivot = df.pivot_table(
-                    index="package",
-                    columns="severity",
-                    aggfunc="size",
-                    fill_value=0
-                )
+            if len(vulns) >= 2:
+                pivot = df.pivot_table(index="package", columns="severity", aggfunc="size", fill_value=0)
                 fig = px.imshow(
                     pivot,
                     text_auto=True,
@@ -343,14 +364,10 @@ if "results" in st.session_state:
                     aspect="auto",
                     title="Severity Distribution by Package"
                 )
-                fig.update_layout(
-                    xaxis_title="Severity",
-                    yaxis_title="Package",
-                    coloraxis_colorbar_title="Count"
-                )
+                fig.update_layout(xaxis_title="Severity", yaxis_title="Package")
                 st.plotly_chart(fig, use_container_width=True)
             else:
-                st.info("Not enough vulnerabilities to generate heatmap.")
+                st.info("Not enough vulnerabilities to generate meaningful heatmap.")
         else:
             st.info("No vulnerabilities detected in this scan.")
         st.markdown("</div>", unsafe_allow_html=True)
@@ -388,4 +405,4 @@ if "results" in st.session_state:
         if "results" in st.session_state:
             del st.session_state.results
         st.rerun()
-                   
+                                 
