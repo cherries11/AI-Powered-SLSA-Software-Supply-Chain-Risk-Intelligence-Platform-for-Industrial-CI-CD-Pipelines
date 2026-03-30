@@ -79,11 +79,10 @@ jobs:
           context: .
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/slsa-risk-app:latest
-          outputs: type=image,name=ghcr.io/${{ github.repository_owner }}/slsa-risk-app:latest,push=true
+          # REMOVE the custom outputs line - use default
       - name: Debug digest
         run: |
-          echo "Raw digest output: ${{ steps.build-and-push.outputs.digest }}"
-          echo "Full image ref: ghcr.io/${{ github.repository_owner }}/slsa-risk-app:latest@${{ steps.build-and-push.outputs.digest }}"
+          echo "Digest: ${{ steps.build-and-push.outputs.digest }}"
 
   sbom:
     name: Generate SBOM
@@ -113,19 +112,18 @@ jobs:
 
 
   provenance:
-    name: Generate SLSA Provenance (Level 3)
+    name: Generate SLSA Provenance
     needs: [docker]
     permissions:
       id-token: write
-      packages: write
-      contents: read
+      contents: write
       actions: read
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
     with:
-      image: ghcr.io/${{ github.repository_owner }}/slsa-risk-app
-      digest: ${{ needs.docker.outputs.digest }}
-      registry-username: ${{ github.actor }}
-    secrets: inherit  # ← ADD THIS
+      base64-subjects: "${{ needs.docker.outputs.digest }}"
+      provenance-name: "provenance.json"
+      upload-assets: true
+    secrets: inherit
 
   sign-docker:
     name: Sign Docker Image (Keyless)
