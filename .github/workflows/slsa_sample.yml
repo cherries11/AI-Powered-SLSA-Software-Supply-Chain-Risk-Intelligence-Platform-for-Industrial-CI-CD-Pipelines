@@ -257,14 +257,15 @@ jobs:
       
       - name: Verify Docker Image Attestation
         run: |
-          cosign verify ghcr.io/${{ github.repository_owner }}/slsa-risk-app@${{ needs.docker.outputs.digest }}
+          cosign verify ghcr.io/${{ github.repository_owner }}/slsa-risk-app@${{ needs.docker.outputs.digest }} \
+            --certificate-identity-regexp="https://github.com/${{ github.repository }}/.github/workflows/slsa_sample.yml@refs/heads/main" \
+            --certificate-oidc-issuer="https://token.actions.githubusercontent.com"
       
-      - name: Verify SBOM Integrity
+      - name: Verify Provenance Content
         run: |
-          # Optional: Add slsa-verifier if needed
-          echo "Verifying SBOM against provenance..."
+          echo "Provenance content:"
           cat provenance.json | jq .
-
+          
   release-artifacts:
     name: Release Artifacts
     runs-on: ubuntu-22.04
