@@ -116,7 +116,6 @@ jobs:
           name: sbom
           path: sbom.json
 
-
   provenance:
     name: Generate SLSA Provenance
     needs: [docker]
@@ -124,27 +123,56 @@ jobs:
     permissions:
       id-token: write
       contents: write
+      packages: write
     steps:
-      - name: Download SLSA generator
-        run: |
-          curl -L -o slsa-generator \
-            https://github.com/slsa-framework/slsa-github-generator/releases/download/v2.1.0/slsa-generator-generic-linux-amd64
-          chmod +x slsa-generator
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v4.0.0
       
-      - name: Create subjects file
-        run: |
-          echo "sha256:${{ needs.docker.outputs.digest }} ghcr.io/${{ github.repository_owner }}/slsa-risk-app" > subjects.txt
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Generate provenance
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create SLSA provenance
         run: |
-          ./slsa-generator generate \
-            --subjects-file subjects.txt \
-            --output-file provenance.json \
-            --github-context ${{ toJson(github) }}
+          cat > provenance.json << EOF
+          {
+            "_type": "https://in-toto.io/Statement/v0.1",
+            "predicateType": "https://slsa.dev/provenance/v0.2",
+            "subject": [{
+              "name": "ghcr.io/${{ github.repository_owner }}/slsa-risk-app",
+              "digest": {"sha256": "${{ needs.docker.outputs.digest }}"}
+            }],
+            "predicate": {
+              "builder": {"id": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"},
+              "buildType": "https://github.com/slsa-framework/slsa-github-generator/container@v1",
+              "invocation": {
+                "configSource": {
+                  "uri": "git+https://github.com/${{ github.repository }}@${{ github.ref }}",
+                  "digest": {"sha1": "${{ github.sha }}"}
+                }
+              },
+              "metadata": {
+                "buildInvocationId": "${{ github.run_id }}",
+                "completeness": {"parameters": true, "environment": true, "materials": false},
+                "reproducible": false
+              }
+            }
+          }
+          EOF
+          cat provenance.json
       
-      - name: Upload provenance
+      - name: Attest and sign provenance
+        run: |
+          # Create attestation
+          cosign attest --predicate provenance.json \
+            --type slsaprovenance \
+            --yes \
+            ghcr.io/${{ github.repository_owner }}/slsa-risk-app@sha256:${{ needs.docker.outputs.digest }}
+      
+      - name: Upload provenance artifact
         uses: actions/upload-artifact@v4
         with:
           name: provenance
