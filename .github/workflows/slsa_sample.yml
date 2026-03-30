@@ -14,7 +14,6 @@ on:
   workflow_dispatch:
 
 jobs:
-
   dummy-warmup:
     name: Warm-up remote workflow cache
     runs-on: ubuntu-latest
@@ -27,22 +26,18 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
       - name: Lint (report only, non-fatal)
         run: |
           pip install flake8
           flake8 . --exit-zero || true
-
       - name: Run tests
         env:
           PYTHONPATH: ${{ github.workspace }}
@@ -54,7 +49,6 @@ jobs:
             --cov=backend \
             --cov-report=xml \
             -W ignore::DeprecationWarning || true
-
       - name: Upload code coverage
         uses: codecov/codecov-action@v5
         with:
@@ -71,14 +65,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Build and Push Docker image
         id: build-and-push
         uses: docker/build-push-action@v6
@@ -87,12 +79,10 @@ jobs:
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/slsa-risk-app:latest
           outputs: type=image,name=ghcr.io/${{ github.repository_owner }}/slsa-risk-app:latest,push=true
-
       - name: Debug digest
         run: |
           echo "Raw digest output: ${{ steps.build-and-push.outputs.digest }}"
           echo "Full image ref: ghcr.io/${{ github.repository_owner }}/slsa-risk-app:latest@${{ steps.build-and-push.outputs.digest }}"
-
 
   sbom:
     name: Generate SBOM
@@ -101,44 +91,40 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Log in to GHCR (for Syft pull)
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Install Syft
         uses: anchore/sbom-action/download-syft@v0.22.2
-
       - name: Generate SBOM
         run: |
           syft ghcr.io/${{ github.repository_owner }}/slsa-risk-app:latest@${{ needs.docker.outputs.digest }} \
             -o spdx-json > sbom.json
           cat sbom.json
-
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@v4
         with:
           name: sbom
           path: sbom.json
 
+          
   provenance:
     name: Generate SLSA Provenance (Level 3)
     needs: [docker]
+    # Remove runs-on here - reusable workflow defines its own runner
     permissions:
-      id-token: write   # Required for keyless signing
-      packages: write   # Required to push to GHCR
-      actions: read     # Required for workflow metadata
+      id-token: write
+      packages: write
+      contents: read  # Needed for the reusable workflow
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
     with:
-      # This matches your Docker log: ghcr.io/kamisara/slsa-risk-app
       image: ghcr.io/${{ github.repository_owner }}/slsa-risk-app
       digest: ${{ needs.docker.outputs.digest }}
-    secrets:
       registry-username: ${{ github.actor }}
-      registry-password: ${{ secrets.GITHUB_TOKEN }}
+      # Optional: provenance-name: provenance.json
 
   sign-docker:
     name: Sign Docker Image (Keyless)
@@ -151,14 +137,12 @@ jobs:
     steps:
       - name: Install Cosign
         uses: sigstore/cosign-installer@v4.0.0
-
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Sign Docker Image (Keyless)
         run: |
           cosign sign --yes ghcr.io/${{ github.repository_owner }}/slsa-risk-app:latest@${{ needs.docker.outputs.digest }}
@@ -170,20 +154,16 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Install Cosign
         uses: sigstore/cosign-installer@v4.0.0
-
       - name: Download SBOM artifact
         uses: actions/download-artifact@v4
         with:
           name: sbom
           path: .
-
       - name: Verify Docker Image Attestation
         run: |
           cosign verify ghcr.io/${{ github.repository_owner }}/slsa-risk-app:latest@${{ needs.docker.outputs.digest }}
-
       - name: Verify SBOM Integrity
         run: |
           slsa-verifier verify-artifacts ./provenance.json --materials ./sbom.json
@@ -196,20 +176,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Download SBOM artifact
         uses: actions/download-artifact@v4
         with:
           name: sbom
           path: .
-
       - name: Create GitHub Release
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
-
       - name: Upload SBOM
         uses: actions/upload-release-asset@v1
         with:
@@ -217,7 +194,6 @@ jobs:
           asset_path: sbom.json
           asset_name: sbom.json
           asset_content_type: application/json
-
       - name: Upload Provenance
         uses: actions/upload-release-asset@v1
         with:
@@ -225,5 +201,3 @@ jobs:
           asset_path: provenance.json
           asset_name: provenance.json
           asset_content_type: application/json
-
-          
