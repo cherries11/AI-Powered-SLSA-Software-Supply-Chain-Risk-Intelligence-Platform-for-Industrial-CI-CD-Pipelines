@@ -116,14 +116,14 @@ jobs:
     needs: [docker]
     permissions:
       id-token: write
-      contents: write
+      contents: write  # Generic needs write to upload attestation
       actions: read
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
     with:
-      image: ghcr.io/${{ github.repository_owner }}/slsa-risk-app
-      digest: ${{ needs.docker.outputs.digest }}
-      registry-username: ${{ github.actor }}
-    secrets: inherit  # ← ADD THIS
+      base64-subjects: "${{ needs.docker.outputs.digest }}"
+      provenance-name: "provenance.json"
+      upload-assets: true
+    secrets: inherit
 
   sign-docker:
     name: Sign Docker Image (Keyless)
