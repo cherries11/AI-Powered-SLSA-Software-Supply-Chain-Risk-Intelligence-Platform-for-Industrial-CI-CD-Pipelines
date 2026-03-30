@@ -83,6 +83,12 @@ jobs:
       - name: Debug digest
         run: |
           echo "Digest: ${{ steps.build-and-push.outputs.digest }}"
+          echo "Formatted: sha256:${{ steps.build-and-push.outputs.digest }}"
+          if [[ "${{ steps.build-and-push.outputs.digest }}" == sha256:* ]]; then
+            echo "Digest already has sha256: prefix"
+          else
+            echo "Digest needs sha256: prefix added"
+          fi
 
   sbom:
     name: Generate SBOM
@@ -114,16 +120,35 @@ jobs:
   provenance:
     name: Generate SLSA Provenance
     needs: [docker]
+    runs-on: ubuntu-latest
     permissions:
       id-token: write
-      contents: write  # Generic needs write to upload attestation
-      actions: read
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
-    with:
-      base64-subjects: "${{ needs.docker.outputs.digest }}"
-      provenance-name: "provenance.json"
-      upload-assets: true
-    secrets: inherit
+      contents: write
+    steps:
+      - name: Download SLSA generator
+        run: |
+          curl -L -o slsa-generator \
+            https://github.com/slsa-framework/slsa-github-generator/releases/download/v2.1.0/slsa-generator-generic-linux-amd64
+          chmod +x slsa-generator
+      
+      - name: Create subjects file
+        run: |
+          echo "sha256:${{ needs.docker.outputs.digest }} ghcr.io/${{ github.repository_owner }}/slsa-risk-app" > subjects.txt
+      
+      - name: Generate provenance
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./slsa-generator generate \
+            --subjects-file subjects.txt \
+            --output-file provenance.json \
+            --github-context ${{ toJson(github) }}
+      
+      - name: Upload provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: provenance
+          path: provenance.json
 
   sign-docker:
     name: Sign Docker Image (Keyless)
