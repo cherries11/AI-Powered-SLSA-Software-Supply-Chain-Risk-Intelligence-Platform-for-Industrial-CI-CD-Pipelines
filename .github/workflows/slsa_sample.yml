@@ -5,6 +5,7 @@ permissions:
   contents: read
   packages: write
   attestations: write
+  actions: read
 
 on:
   push:
@@ -110,21 +111,21 @@ jobs:
           name: sbom
           path: sbom.json
 
-          
+
   provenance:
     name: Generate SLSA Provenance (Level 3)
     needs: [docker]
-    # Remove runs-on here - reusable workflow defines its own runner
     permissions:
       id-token: write
       packages: write
-      contents: read  # Needed for the reusable workflow
+      contents: read
+      actions: read
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
     with:
       image: ghcr.io/${{ github.repository_owner }}/slsa-risk-app
       digest: ${{ needs.docker.outputs.digest }}
       registry-username: ${{ github.actor }}
-      # Optional: provenance-name: provenance.json
+    secrets: inherit  # ← ADD THIS
 
   sign-docker:
     name: Sign Docker Image (Keyless)
