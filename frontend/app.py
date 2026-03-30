@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime
 import time
 import plotly.graph_objects as go
+import plotly.express as px
 
 
 # ── Cyber-Industrial Minimalism Theme ──
@@ -129,6 +130,20 @@ if st.button("Analyze Repository", type="primary", use_container_width=True):
                         "severity": "CRITICAL",
                         "cve": "CVE-2023-1234",
                         "description": "Remote code execution via crafted URL"
+                    },
+                    {
+                        "package": "urllib3",
+                        "version": "1.26.5",
+                        "severity": "HIGH",
+                        "cve": "CVE-2024-5678",
+                        "description": "HTTP request smuggling vulnerability"
+                    },
+                    {
+                        "package": "numpy",
+                        "version": "1.19.0",
+                        "severity": "MEDIUM",
+                        "cve": "CVE-2022-3456",
+                        "description": "Buffer overflow in array operations"
                     }
                 ]
             },
@@ -214,7 +229,7 @@ if "results" in st.session_state:
             delta=f"{sbom.get('outdated') or 0} outdated"
         )
 
-    # Vulnerabilities
+    # Vulnerabilities count
     with cols[3]:
         vulns_count = len(scan.get("vulnerabilities", []))
         badge_class = "critical" if vulns_count > 0 else "safe"
@@ -231,7 +246,6 @@ if "results" in st.session_state:
     with tab1:
         st.markdown("<div class='card'>", unsafe_allow_html=True)
 
-        # AI Risk Gauge (repeated in tab)
         st.subheader("AI Risk Score")
         score = ai.get("score") or "N/A"
         level = ai.get("level") or "Pending"
@@ -239,30 +253,26 @@ if "results" in st.session_state:
         st.metric("Score", f"{score}/100", delta_color="inverse")
         st.markdown(f"<p style='color:{color}; font-weight:bold; font-size:1.2rem;'>{level} Risk</p>", unsafe_allow_html=True)
 
-        # Improved Breakdown Bar Chart (Plotly - aesthetic & interactive)
+        # Risk Factor Breakdown (Plotly)
         st.subheader("Risk Factor Breakdown")
         if ai.get("top_factors"):
             factors = [f["factor"] for f in ai["top_factors"]]
             weights = [f["weight"] for f in ai["top_factors"]]
 
-            # Sort descending
             sorted_data = sorted(zip(factors, weights), key=lambda x: x[1], reverse=True)
             sorted_factors, sorted_weights = zip(*sorted_data)
 
-            fig = go.Figure()
-
-            fig.add_trace(go.Bar(
+            fig = go.Figure(go.Bar(
                 y=sorted_factors,
                 x=sorted_weights,
                 orientation='h',
                 marker=dict(
                     color=sorted_weights,
-                    colorscale='Bluered_r',  # cyan to deep blue-red gradient
-                    line=dict(color='#00F5FF', width=2)  # solid cyan border
+                    colorscale='Bluered_r',
+                    line=dict(color='#00F5FF', width=2)
                 ),
                 text=[f"{w}%" for w in sorted_weights],
                 textposition='auto',
-                textfont=dict(color="#0E1117", size=12),
                 hovertemplate="%{y}: <b>%{x}%</b> impact<extra></extra>",
                 marker_opacity=0.92
             ))
@@ -270,29 +280,16 @@ if "results" in st.session_state:
             fig.update_layout(
                 title="Contribution to Overall Risk Score",
                 title_x=0.5,
-                title_font=dict(size=18, color="#00F5FF"),
                 xaxis_title="Weight (%)",
                 yaxis_title="Risk Factor",
                 height=320,
                 margin=dict(l=20, r=20, t=60, b=40),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="#E0E0E0", family="Segoe UI, sans-serif", size=12),
-                xaxis=dict(
-                    gridcolor="#444",
-                    zerolinecolor="#555",
-                    range=[0, max(sorted_weights) * 1.15 if sorted_weights else 100]
-                ),
-                yaxis=dict(
-                    gridcolor="#444",
-                    zeroline=False,
-                    autorange="reversed"
-                ),
-                bargap=0.25,
-                bargroupgap=0.1
+                font=dict(color="#E0E0E0"),
+                yaxis=dict(autorange="reversed")
             )
-
-            st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+            st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("No risk factor breakdown available yet.")
 
@@ -305,9 +302,7 @@ if "results" in st.session_state:
                 st.markdown(f"→ {a}")
         if ai.get("top_factors"):
             max_factor = max(ai["top_factors"], key=lambda x: x["weight"])
-            st.markdown(
-                f"**Top contributor:** {max_factor['factor']} with {max_factor['weight']}% impact"
-            )
+            st.markdown(f"**Top contributor:** {max_factor['factor']} with {max_factor['weight']}% impact")
 
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -330,6 +325,32 @@ if "results" in st.session_state:
                 df.style.map(color_severity, subset=["severity"]),
                 use_container_width=True
             )
+
+            # === Step 3.4: Vulnerability Heatmap (Severity by Package) ===
+            st.subheader("Vulnerability Heatmap")
+            if len(vulns) > 1:
+                # Create pivot table for heatmap: packages vs severity count
+                pivot = df.pivot_table(
+                    index="package",
+                    columns="severity",
+                    aggfunc="size",
+                    fill_value=0
+                )
+                fig = px.imshow(
+                    pivot,
+                    text_auto=True,
+                    color_continuous_scale="Reds",
+                    aspect="auto",
+                    title="Severity Distribution by Package"
+                )
+                fig.update_layout(
+                    xaxis_title="Severity",
+                    yaxis_title="Package",
+                    coloraxis_colorbar_title="Count"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("Not enough vulnerabilities to generate heatmap.")
         else:
             st.info("No vulnerabilities detected in this scan.")
         st.markdown("</div>", unsafe_allow_html=True)
@@ -367,4 +388,4 @@ if "results" in st.session_state:
         if "results" in st.session_state:
             del st.session_state.results
         st.rerun()
-             
+                   
