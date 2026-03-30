@@ -140,41 +140,70 @@ jobs:
       
       - name: Create SLSA provenance
         run: |
-          # Handle digest - strip sha256: prefix if present for JSON
+          # Handle digest - strip sha256: prefix for JSON
           DIGEST="${{ needs.docker.outputs.digest }}"
           DIGEST_CLEAN="${DIGEST#sha256:}"
           
-          cat > provenance.json << EOF
+          cat > provenance.json << 'PROVENANCE_EOF'
           {
             "_type": "https://in-toto.io/Statement/v0.1",
             "predicateType": "https://slsa.dev/provenance/v0.2",
             "subject": [{
               "name": "ghcr.io/${{ github.repository_owner }}/slsa-risk-app",
-              "digest": {"sha256": "$DIGEST_CLEAN"}
+              "digest": {"sha256": "${{ needs.docker.outputs.digest }}"}
             }],
             "predicate": {
-              "builder": {"id": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"},
+              "builder": {
+                "id": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              },
               "buildType": "https://github.com/slsa-framework/slsa-github-generator/container@v1",
               "invocation": {
                 "configSource": {
                   "uri": "git+https://github.com/${{ github.repository }}@refs/heads/main",
-                  "digest": {"sha1": "${{ github.sha }}"}
+                  "digest": {
+                    "sha1": "${{ github.sha }}"
+                  },
+                  "entryPoint": ".github/workflows/slsa_sample.yml"
+                },
+                "parameters": {},
+                "environment": {
+                  "github_actor": "${{ github.actor }}",
+                  "github_sha": "${{ github.sha }}",
+                  "github_ref": "${{ github.ref }}",
+                  "github_repository": "${{ github.repository }}",
+                  "github_run_id": "${{ github.run_id }}"
                 }
               },
+              "buildConfig": null,
               "metadata": {
                 "buildInvocationId": "${{ github.run_id }}",
-                "completeness": {"parameters": true, "environment": true, "materials": false},
+                "completeness": {
+                  "parameters": true,
+                  "environment": true,
+                  "materials": false
+                },
                 "reproducible": false
-              }
+              },
+              "materials": [
+                {
+                  "uri": "git+https://github.com/${{ github.repository }}@refs/heads/main",
+                  "digest": {
+                    "sha1": "${{ github.sha }}"
+                  }
+                }
+              ]
             }
           }
-          EOF
+          PROVENANCE_EOF
+          
+          # Fix the digest format in the file (remove sha256: from subject digest)
+          sed -i 's/"sha256": "sha256:/"sha256": "/g' provenance.json
+          
           echo "Provenance created:"
-          cat provenance.json
+          cat provenance.json | jq .
       
       - name: Attest and sign provenance
         run: |
-          # Use digest as-is (already has sha256: prefix)
           cosign attest --predicate provenance.json \
             --type slsaprovenance \
             --yes \
