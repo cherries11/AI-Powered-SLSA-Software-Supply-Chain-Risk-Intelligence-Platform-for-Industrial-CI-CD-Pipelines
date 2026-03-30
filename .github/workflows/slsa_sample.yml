@@ -125,7 +125,8 @@ jobs:
       image: ghcr.io/${{ github.repository_owner }}/slsa-risk-app
       digest: ${{ needs.docker.outputs.digest }}
       registry-username: ${{ github.actor }}
-    secrets: inherit  # ← ADD THIS
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}  # ← CORRECT WAY
 
   sign-docker:
     name: Sign Docker Image (Keyless)
