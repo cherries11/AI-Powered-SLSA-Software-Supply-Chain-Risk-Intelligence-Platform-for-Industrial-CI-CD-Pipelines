@@ -89,6 +89,7 @@ jobs:
           else
             echo "Digest needs sha256: prefix added"
           fi
+
   sbom:
     name: Generate SBOM
     runs-on: ubuntu-22.04
@@ -230,6 +231,7 @@ jobs:
       - name: Sign Docker Image (Keyless)
         run: |
           cosign sign --yes ghcr.io/${{ github.repository_owner }}/slsa-risk-app:latest@${{ needs.docker.outputs.digest }}
+
   verify:
     name: Verify SBOM & Provenance
     runs-on: ubuntu-22.04
@@ -270,6 +272,7 @@ jobs:
         run: |
           echo "Provenance content:"
           cat provenance.json | jq .
+
   release-artifacts:
     name: Release Artifacts
     runs-on: ubuntu-22.04
